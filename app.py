@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory
 import requests
 import mariadb
 import os
@@ -10,6 +10,7 @@ load_dotenv(override=True)
 app = Flask(__name__)
 
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
+CACHE_DIR = 'cover_cache'
 
 # MariaDB connection parameters
 DB_CONFIG = {
@@ -57,10 +58,27 @@ def insert_book(book):
         conn.close()
 
 def get_all_books():
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
+
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
-    cur.execute("SELECT title, author, cover, status FROM books")
+    cur.execute("SELECT id, title, author, cover, status FROM books")
     books = cur.fetchall()
+
+    for book in books:
+        cover_url = book['cover']
+        if cover_url:
+            # Derive filename from URL
+            filename = os.path.join(CACHE_DIR, str(book['id']))
+            if not os.path.exists(filename):
+                # Download and save cover
+                response = requests.get(cover_url)
+                if response.status_code == 200:
+                    with open(filename, 'wb') as f:
+                        f.write(response.content)
+            book['cover'] = filename if os.path.exists(filename) else None
+
     cur.close()
     conn.close()
     return books
@@ -172,6 +190,10 @@ def stats():
     return render_template("stats.html", total_books=total_books,
                            status_breakdown=status_breakdown,
                            author_breakdown=author_breakdown)
+
+@app.route('/cover_cache/<path:filename>')
+def serve_cover_cache(filename):
+    return send_from_directory(CACHE_DIR, filename)
 
 if __name__ == "__main__":
     create_table()
