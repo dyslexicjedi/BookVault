@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Library Statistics</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem; }
+        h1 { margin-bottom: 1rem; }
+        section { margin-bottom: 2rem; }
+        table { border-collapse: collapse; width: 50%; }
+        th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+        th { background-color: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>Library Statistics</h1>
+
+    <section>
+        <h2>Total Books in Library</h2>
+        <p>{{ total_books }}</p>
+    </section>
+
+    <section>
+        <h2>Breakdown by Status</h2>
+        <table>
+            <thead><tr><th>Status</th><th>Count</th></tr></thead>
+            <tbody>
+            {% for status, count in status_breakdown.items() %}
+                <tr><td>{{ status }}</td><td>{{ count }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Breakdown by Author</h2>
+        <table>
+            <thead><tr><th>Author</th><th>Number of Books</th></tr></thead>
+            <tbody>
+            {% for author, count in author_breakdown.items() %}
+                <tr><td>{{ author }}</td><td>{{ count }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <p><a href="{{ url_for('index') }}">Back to Library</a></p>
+</body>
+</html>

@@ -1,0 +1,4 @@
+flask
+requests
+mariadb
+python-dotenv
