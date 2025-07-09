@@ -7,6 +7,6 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
-ADD templates /usr/src/app/tempaltes/
+ADD templates /usr/src/app/templates/
 
 CMD ["python","./app.py"]
