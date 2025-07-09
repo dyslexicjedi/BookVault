@@ -63,16 +63,14 @@ def get_all_books():
 
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
-    cur.execute("SELECT id, title, author, cover, status FROM books")
+    cur.execute("SELECT id, title, author, cover, status, COALESCE(rating, 0) as rating FROM books")
     books = cur.fetchall()
 
     for book in books:
         cover_url = book['cover']
         if cover_url:
-            # Derive filename from URL
             filename = os.path.join(CACHE_DIR, str(book['id']))
             if not os.path.exists(filename):
-                # Download and save cover
                 response = requests.get(cover_url)
                 if response.status_code == 200:
                     with open(filename, 'wb') as f:
@@ -132,6 +130,29 @@ def get_books_stats():
     status_breakdown = Counter(book['status'].strip() for book in books)
     author_breakdown = Counter(book['author'].strip() for book in books)
     return total_books, status_breakdown, author_breakdown
+
+def update_book_status_and_rating(title, author, status, rating):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Add rating column if not exists (execute once)
+        cur.execute("""
+            ALTER TABLE books 
+            ADD COLUMN IF NOT EXISTS rating INT DEFAULT 0
+        """)
+    except mariadb.Error:
+        # Ignore if column already exists
+        pass
+    try:
+        cur.execute("""
+            UPDATE books SET status = %s, rating = %s WHERE title = %s AND author = %s
+        """, (status, rating, title, author))
+        conn.commit()
+    except mariadb.Error as e:
+        print(f"Error updating book status and rating: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -194,6 +215,17 @@ def stats():
 @app.route('/cover_cache/<path:filename>')
 def serve_cover_cache(filename):
     return send_from_directory(CACHE_DIR, filename)
+
+@app.route("/update_status_rating", methods=["POST"])
+def update_status_rating():
+    data = request.json
+    title = data.get("title")
+    author = data.get("author")
+    new_status = data.get("status")
+    rating = data.get("rating", 0)
+    if new_status in STATUS_OPTIONS:
+        update_book_status_and_rating(title, author, new_status, rating)
+    return jsonify(success=True)
 
 if __name__ == "__main__":
     create_table()
