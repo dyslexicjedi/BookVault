@@ -25,7 +25,7 @@ BookVault is a simple web application to manage and track your personal book col
 1. Clone this repository:
 
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/dyslexicjedi/BookVault
    cd bookvault
    ```
 
@@ -45,12 +45,13 @@ BookVault is a simple web application to manage and track your personal book col
 4. Setup your MariaDB database and user.
 
 5. Create a `.env` file in the project root with the following variables:
+    ```
     BOOKVAULT_DBUSER=your_db_username 
     BOOKVAULT_DBPASS=your_db_password 
     BOOKVAULT_DBHOST=localhost 
     BOOKVAULT_DBPORT=3306 
     BOOKVAULT_DBNAME=your_db_name
-
+    ```
 
 6. Run the application:
 
