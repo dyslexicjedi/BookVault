@@ -115,7 +115,7 @@ def remove_book(title, author):
         cur.close()
         conn.close()
 
-def search_google_books_multiple(query, max_results=10):
+def search_google_books_multiple(query, max_results=20):
     url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults={max_results}"
     response = requests.get(url)
     if response.status_code != 200:
@@ -172,6 +172,26 @@ def update_book_status_and_rating(title, author, status, rating):
     finally:
         cur.close()
         conn.close()
+
+# Add this helper function for ISBN lookup
+def search_google_books_by_isbn(isbn):
+    url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&maxResults=5"
+    response = requests.get(url)
+    if response.status_code != 200:
+        return []
+    data = response.json()
+    items = data.get("items", [])
+    results = []
+    for item in items:
+        book_info = item["volumeInfo"]
+        results.append({
+            "title": book_info.get("title", "Unknown title"),
+            "author": ", ".join(book_info.get("authors", ["Unknown author"])),
+            "cover": book_info.get("imageLinks", {}).get("thumbnail",
+                                                        "https://via.placeholder.com/128x195?text=No+Cover")
+        })
+    return results
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -246,6 +266,25 @@ def update_status_rating():
     if new_status in STATUS_OPTIONS:
         update_book_status_and_rating(title, author, new_status, rating)
     return jsonify(success=True)
+
+@app.route("/isbn_lookup", methods=["POST"])
+def isbn_lookup():
+    isbn = request.form.get("isbn", "").strip()
+    if not isbn:
+        return redirect(url_for("index"))
+    # Search Google Books by ISBN
+    results = search_google_books_by_isbn(isbn)
+    if len(results) == 1:
+        book = results[0]
+        book['status'] = "TBR"
+        insert_book(book)
+        return redirect(url_for("index"))
+    elif len(results) > 1:
+        books = get_all_books()
+        return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results)
+    else:
+        # No results found
+        return redirect(url_for("index"))
 
 if __name__ == "__main__":
     create_table()
