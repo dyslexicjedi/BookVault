@@ -4,6 +4,7 @@ import mariadb
 import os
 from collections import Counter
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv(override=True)
 
@@ -35,6 +36,7 @@ def create_table():
             author VARCHAR(255),
             cover VARCHAR(512),
             status ENUM('TBR', 'Reading', 'Read', 'DNF') DEFAULT 'TBR',
+            last_status_change DATETIME DEFAULT NULL,
             UNIQUE KEY unique_book (title, author)
         )
     """)
@@ -46,10 +48,11 @@ def insert_book(book):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        now = datetime.now()
         cur.execute("""
-            INSERT INTO books (title, author, cover, status) VALUES (%s, %s, %s, %s)
+            INSERT INTO books (title, author, cover, status, last_status_change) VALUES (%s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE cover=VALUES(cover), status=status
-        """, (book['title'], book['author'], book['cover'], book['status']))
+        """, (book['title'], book['author'], book['cover'], book['status'], now))
         conn.commit()
     except mariadb.Error as e:
         print(f"Error inserting book: {e}")
@@ -63,7 +66,7 @@ def get_all_books():
 
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
-    cur.execute("SELECT id, title, author, cover, status, COALESCE(rating, 0) as rating FROM books")
+    cur.execute("SELECT id, title, author, cover, status, COALESCE(rating, 0) as rating, last_status_change FROM books")
     books = cur.fetchall()
 
     for book in books:
@@ -76,6 +79,9 @@ def get_all_books():
                     with open(filename, 'wb') as f:
                         f.write(response.content)
             book['cover'] = filename if os.path.exists(filename) else None
+        # Format last_status_change as string if present
+        if book['last_status_change']:
+            book['last_status_change'] = book['last_status_change'].strftime("%Y-%m-%d %H:%M:%S")
 
     cur.close()
     conn.close()
@@ -85,7 +91,10 @@ def update_book_status(title, author, status):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE books SET status = %s WHERE title = %s AND author = %s", (status, title, author))
+        now = datetime.now()
+        cur.execute("""
+            UPDATE books SET status = %s, last_status_change = %s WHERE title = %s AND author = %s
+        """, (status, now, title, author))
         conn.commit()
     except mariadb.Error as e:
         print(f"Error updating book status: {e}")
@@ -129,7 +138,15 @@ def get_books_stats():
     total_books = len(books)
     status_breakdown = Counter(book['status'].strip() for book in books)
     author_breakdown = Counter(book['author'].strip() for book in books)
-    return total_books, status_breakdown, author_breakdown
+
+    # Count books read by year of last_status_change
+    read_years = Counter()
+    for book in books:
+        if book['status'].strip() == "Read" and book['last_status_change']:
+            year = datetime.strptime(book['last_status_change'], "%Y-%m-%d %H:%M:%S").year
+            read_years[year] += 1
+
+    return total_books, status_breakdown, author_breakdown, read_years
 
 def update_book_status_and_rating(title, author, status, rating):
     conn = get_db_connection()
@@ -137,16 +154,18 @@ def update_book_status_and_rating(title, author, status, rating):
     try:
         # Add rating column if not exists (execute once)
         cur.execute("""
-            ALTER TABLE books 
-            ADD COLUMN IF NOT EXISTS rating INT DEFAULT 0
+            ALTER TABLE books
+            ADD COLUMN IF NOT EXISTS rating INT DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS last_status_change DATETIME DEFAULT NULL
         """)
     except mariadb.Error:
         # Ignore if column already exists
         pass
     try:
+        now = datetime.now()
         cur.execute("""
-            UPDATE books SET status = %s, rating = %s WHERE title = %s AND author = %s
-        """, (status, rating, title, author))
+            UPDATE books SET status = %s, rating = %s, last_status_change = %s WHERE title = %s AND author = %s
+        """, (status, rating, now, title, author))
         conn.commit()
     except mariadb.Error as e:
         print(f"Error updating book status and rating: {e}")
@@ -207,10 +226,11 @@ def remove_book_route():
 
 @app.route("/stats")
 def stats():
-    total_books, status_breakdown, author_breakdown = get_books_stats()
+    total_books, status_breakdown, author_breakdown, read_years = get_books_stats()
     return render_template("stats.html", total_books=total_books,
                            status_breakdown=status_breakdown,
-                           author_breakdown=author_breakdown)
+                           author_breakdown=author_breakdown,
+                           read_years=read_years)
 
 @app.route('/cover_cache/<path:filename>')
 def serve_cover_cache(filename):
