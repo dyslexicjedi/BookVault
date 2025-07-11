@@ -225,6 +225,11 @@ def index():
     books = get_all_books()
     return render_template("index.html", books=books, status_options=STATUS_OPTIONS)
 
+@app.route("/api/get_books")
+def get_books():
+    books = get_all_books()
+    return books
+
 @app.route("/update_status", methods=["POST"])
 def update_status():
     data = request.json
