@@ -10,5 +10,6 @@ COPY app.py .
 COPY helpers.py .
 COPY api_blueprint.py .
 ADD templates /usr/src/app/templates/
+ADD static /usr/src/app/static/
 
 CMD ["python","./app.py"]
