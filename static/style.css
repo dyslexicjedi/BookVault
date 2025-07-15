@@ -1,0 +1,120 @@
+body {
+    background: #f8fafc;
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif;
+    color: #24292f;
+}
+
+h1 {
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #254156;
+}
+
+.card {
+    border-radius: 18px;
+    box-shadow: 0 4px 30px rgba(21, 34, 50, 0.09), 0 1.5px 4px rgba(21, 34, 50, 0.04);
+    border: none;
+    transition: box-shadow 0.18s;
+    background: #fff;
+}
+
+.card:hover {
+    box-shadow: 0 7px 36px -2px rgba(21, 34, 50, 0.14);
+    transform: translateY(-2px) scale(1.01);
+}
+
+.card-img-top {
+    height: 189px;
+    object-fit: contain;
+    margin-top: 12px;
+    background: #f5f6fa;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 0.5px 5px 0 rgba(150,150,150,0.07);
+}
+
+.col {
+    max-width: 284px;
+    min-width: 210px;
+    flex: 1 1 0;
+}
+
+.btn-outline-primary, .btn-primary {
+    border-radius: 50px;
+}
+
+.btn-outline-primary:hover,
+.btn-primary:hover {
+    box-shadow: 0 2px 18px #2740d122;
+}
+
+.input-group {
+    box-shadow: 0 2px 10px -5px #8882;
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.input-group .form-control {
+    border: none;
+    border-radius: 0;
+    background: #f5f6fa;
+}
+
+.input-group .form-control:focus {
+    box-shadow: none;
+    background: #f3f5ff;
+}
+
+.status-select, .form-select {
+    border-radius: 8px;
+}
+
+.card-title {
+    font-size: 1.24rem;
+    font-weight: 600;
+    min-height: 2.2em;
+}
+
+.card-text {
+    font-size: 1.01em;
+}
+
+.modal-content {
+    border-radius: 16px;
+    background: #fafdff;
+}
+
+.star {
+    color: #e4e5e9;
+    cursor: pointer;
+    user-select: none;
+    font-size: 1.55rem;
+    transition: color 0.16s;
+}
+
+.star.selected,
+.star:hover,
+.star:hover ~ .star {
+    color: #ffc107 !important;
+}
+
+.edit-btn {
+    border-radius: 50% !important;
+    background: #fff !important;
+    box-shadow: 0 0.5px 7px rgba(70,85,120,.11);
+    transition: background 0.16s, box-shadow 0.16s;
+}
+
+.edit-btn:hover {
+    background: #f2efff !important;
+    border-color: #7b45e8 !important;
+}
+
+.list-group-item {
+    border: none;
+    border-radius: 14px;
+    padding: 0.65rem 1rem;
+    background: #f6faff;
+    box-shadow: 0 0.5px 3px #0001;
+    margin-bottom: 6px;
+    align-items: center;
+}

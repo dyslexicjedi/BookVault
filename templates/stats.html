@@ -3,58 +3,264 @@
 <head>
     <meta charset="UTF-8">
     <title>Library Statistics</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 2rem; }
-        h1 { margin-bottom: 1rem; }
-        section { margin-bottom: 2rem; }
-        table { border-collapse: collapse; width: 50%; }
+        body { font-family: Arial, sans-serif; margin: 2rem; background: #fcfcfc; }
+        h1 { margin-bottom: 1.5rem; }
+        .charts-wrapper { display: flex; flex-direction: column; gap: 2rem; }
+        .chart-section { background: #fff; border-radius: 7px; box-shadow: 0 1px 6px #e0e0e0; padding: 1.5rem 1.5rem 1rem 1.5rem; }
+        .chart-container { max-width: 680px; width: 100%; margin: 0 auto; overflow-x: auto; }
+        .d3-tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(0,0,0,0.9);
+            color: #fff;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            z-index: 10;
+            display: none;
+        }
+        @media (max-width: 860px) {
+          .chart-container { max-width: 98vw; }
+          body { margin: 0.7rem; }
+        }
+        section, .chart-section { margin-bottom: 0; }
+        table { border-collapse: collapse; width: 100%; }
         th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
         th { background-color: #f0f0f0; }
     </style>
 </head>
 <body>
     <h1>Library Statistics</h1>
-
-    <section>
-        <h2>Total Books in Library</h2>
-        <p>{{ total_books }}</p>
-    </section>
-
-    <section>
-        <h2>Breakdown by Status</h2>
-        <table>
-            <thead><tr><th>Status</th><th>Count</th></tr></thead>
-            <tbody>
-            {% for status, count in status_breakdown.items() %}
-                <tr><td>{{ status }}</td><td>{{ count }}</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </section>
-
-    <section>
+    <div class="charts-wrapper">
+    <table>
+        <tr>
+            <td>
+                <section>
+                    <h2>Total Books in Library</h2>
+                    <p>{{ total_books }}</p>
+            </section>
+            </td>
+            <td>
+            <section class="chart-section">
+                    <h2>Breakdown by Status</h2>
+                    <div id="status-pie" class="chart-container"></div>
+            </section>
+            </td>
+            <td>
+                <section class="chart-section">
+                    <h2>Books Read by Year</h2>
+                    <div id="year-bar" class="chart-container"></div>
+                </section>
+            </td>
+        </tr>
+    </table>
+    <section class="chart-section">
         <h2>Breakdown by Author</h2>
-        <table>
-            <thead><tr><th>Author</th><th>Number of Books</th></tr></thead>
-            <tbody>
+        <div id="author-line" class="chart-container"></div>
+    </section>
+    </div>
+    <p style="margin-top:2rem;"><a href="{{ url_for('index') }}">Back to Library</a></p>
+    <div id="d3-tooltip" class="d3-tooltip"></div>
+    <script>
+        const statusData = [
+            {% for status, count in status_breakdown.items() %}
+                {status: "{{ status }}", count: {{ count }}},
+            {% endfor %}
+        ];
+        const yearData = [
+            {% for year, count in read_years|dictsort %}
+                {year: "{{ year }}", count: {{ count }}},
+            {% endfor %}
+        ];
+        const authorData = [
             {% for author, count in author_breakdown.items() %}
-                <tr><td>{{ author }}</td><td>{{ count }}</td></tr>
+                {author: `{{ author | e }}`, count: {{ count }}},
             {% endfor %}
-            </tbody>
-        </table>
-    </section>
-        <section>
-        <h2>Books Read by Year</h2>
-        <table>
-            <thead><tr><th>Year</th><th>Books Read</th></tr></thead>
-            <tbody>
-            {% for year, count in read_years.items()|sort %}
-                <tr><td>{{ year }}</td><td>{{ count }}</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </section>
+        ];
+    </script>
+    <script>
+    // PIE CHART: Breakdown by Status
+    (function() {
+        const width = 420, height = 320, radius = Math.min(width, height) / 2 - 10;
+        const color = d3.scaleOrdinal(d3.schemeCategory10);
+        const svg = d3.select('#status-pie')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+          .append('g')
+            .attr('transform', `translate(${width/2},${height/2})`);
+        const pie = d3.pie().value(d => d.count);
+        const arc = d3.arc().innerRadius(0).outerRadius(radius);
+        const tooltip = d3.select("#d3-tooltip");
 
-    <p><a href="{{ url_for('index') }}">Back to Library</a></p>
+        svg.selectAll('path')
+            .data(pie(statusData))
+            .enter().append('path')
+            .attr('d', arc)
+            .attr('fill', d => color(d.data.status))
+            .attr('stroke', '#fff')
+            .attr('stroke-width', '2px')
+            .on("mousemove", function(e, d){
+                tooltip.style("display", "block")
+                    .html(`<b>${d.data.status}</b>: ${d.data.count}`)
+                    .style("left", (e.pageX + 16) + "px")
+                    .style("top", (e.pageY - 24) + "px");
+            })
+            .on("mouseout", () => tooltip.style("display", "none"));
+
+        // Add legend
+        const legend = svg.append("g")
+            .attr("transform", `translate(${-width/2 + 15},${-height/2 + 15})`);
+        legend.selectAll("rect")
+            .data(statusData)
+            .enter().append("rect")
+            .attr("x", 0).attr("y", (d,i)=>i*22)
+            .attr("width", 16).attr("height", 16)
+            .attr("fill", (d,i) => color(d.status));
+        legend.selectAll("text")
+            .data(statusData)
+            .enter().append("text")
+            .attr("x", 24).attr("y",(d,i)=>i*22 + 12)
+            .style("font-size","15px")
+            .text(d=>d.status);
+    })();
+
+    // LINE CHART: Breakdown by Author
+    (function() {
+        if (!authorData.length) return;
+        const margin = {top: 36, right: 10, bottom: 80, left: 16};
+        const numAuthors = authorData.length;
+
+        // Compute width from container
+        const container = document.getElementById("author-line");
+        // Use full container width, fallback to 700 if unavailable
+        const width = Math.max((container ? container.getBoundingClientRect().width : 1100) - margin.left - margin.right);
+        const height = 340;
+        const svg = d3.select("#author-line")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+          .append("g")
+            .attr("transform",`translate(${margin.left},${margin.top})`);
+        const x = d3.scalePoint()
+            .domain(authorData.map(d=>d.author))
+            .range([0,width])
+            .padding(0.5);
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(authorData, d => d.count) || 1])
+            .nice()
+            .range([height,0]);
+
+        // X axis:
+        svg.append("g")
+            .attr("transform",`translate(0,${height})`)
+            .call(
+                d3.axisBottom(x)
+                .tickFormat(d => d.length > 13 ? d.slice(0,11)+"…" : d)
+            )
+            .selectAll("text")
+            .attr("text-anchor", "end")
+            .attr("dx", "-0.5em")
+            .attr("dy", ".3em")
+            .attr("transform", "rotate(-32)");
+        // Y axis:
+        svg.append("g").call(d3.axisLeft(y).ticks(8));
+        // Tooltip
+        const tooltip = d3.select("#d3-tooltip");
+
+        // Line
+        svg.append("path")
+            .datum(authorData)
+            .attr("fill","none")
+            .attr("stroke","#e67e22")
+            .attr("stroke-width",2.7)
+            .attr("d", d3.line()
+                .x(d=>x(d.author))
+                .y(d=>y(d.count))
+            );
+        // Dots
+        svg.selectAll("dot")
+            .data(authorData)
+            .enter().append("circle")
+            .attr("cx", d=>x(d.author))
+            .attr("cy", d=>y(d.count))
+            .attr("r", 6)
+            .attr("fill", "#e67e22")
+            .on("mousemove", function(e, d){
+                tooltip.style("display", "block")
+                    .html(`<b>${d.author.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</b>: ${d.count} book${d.count==1?"":"s"}`)
+                    .style("left", (e.pageX + 16) + "px")
+                    .style("top", (e.pageY - 24) + "px");
+            })
+            .on("mouseout", () => tooltip.style("display", "none"));
+
+        // Label
+        svg.append("text")
+            .attr("x", width/2)
+            .attr("y", -12)
+            .text("Number of Books per Author")
+            .attr("text-anchor","middle")
+            .style("font-weight","bold");
+    })();
+
+    // BAR CHART: Books Read by Year
+    (function() {
+        const margin = {top: 40, right: 25, bottom: 40, left: 48};
+        const width = 420 - margin.left - margin.right;
+        const height = 320 - margin.top - margin.bottom;
+        const svg = d3.select("#year-bar")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+          .append("g")
+            .attr("transform",`translate(${margin.left},${margin.top})`);
+
+        const years = yearData.map(d=>d.year);
+        const counts = yearData.map(d=>d.count);
+
+        const x = d3.scaleBand()
+            .domain(years)
+            .range([0,width])
+            .padding(0.22);
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(counts)||1])
+            .nice()
+            .range([height,0]);
+
+        svg.append("g")
+            .attr("transform",`translate(0,${height})`)
+            .call(d3.axisBottom(x));
+        svg.append("g")
+            .call(d3.axisLeft(y).ticks(6));
+
+        const tooltip = d3.select("#d3-tooltip");
+
+        svg.selectAll("rect")
+            .data(yearData)
+            .enter().append("rect")
+            .attr("x", d=>x(d.year))
+            .attr("y", d=>y(d.count))
+            .attr("width", x.bandwidth())
+            .attr("height", d=>height-y(d.count))
+            .attr("fill", "#3498db")
+            .on("mousemove", function(e,d){
+                tooltip.style("display", "block")
+                    .html(`<b>${d.year}</b>: ${d.count}`)
+                    .style("left", (e.pageX+16)+"px")
+                    .style("top",(e.pageY-24)+"px");
+            })
+            .on("mouseout", () => tooltip.style("display","none"));
+
+        svg.append("text")
+            .attr("x", width/2)
+            .attr("y", -12)
+            .text("Books Read per Year")
+            .attr("text-anchor","middle")
+            .style("font-weight","bold");
+    })();
+
+    </script>
 </body>
 </html>
