@@ -26,6 +26,7 @@
             <div class="card h-100 book-card-clickable"
                  data-title="{{ book.title }}"
                  data-author="{{ book.author }}"
+                 data-publisher="{{ book.publisher|default('') }}"
                  data-status="{{ book.status }}"
                  data-rating="{{ book.rating|default(0) }}"
                  style="cursor: pointer;">
@@ -99,7 +100,12 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <p><strong id="modalBookTitle"></strong> by <em id="modalBookAuthor"></em></p>
+          <p>
+            <strong id="modalBookTitle"></strong>
+            <br>
+            <span>Author: <em id="modalBookAuthor"></em></span><br>
+            <span>Publisher: <em id="modalBookPublisher"></em></span>
+          </p>
           <div class="mb-3">
             <label for="statusSelect" class="form-label">Status</label>
             <select id="statusSelect" class="form-select" required>
@@ -135,6 +141,7 @@
     const editModal = new bootstrap.Modal(document.getElementById('editModal'));
     const modalTitle = document.getElementById('modalBookTitle');
     const modalAuthor = document.getElementById('modalBookAuthor');
+    const modalPublisher = document.getElementById('modalBookPublisher');
     const statusSelect = document.getElementById('statusSelect');
     const bookTitleInput = document.getElementById('bookTitleInput');
     const bookAuthorInput = document.getElementById('bookAuthorInput');
@@ -154,16 +161,17 @@
         });
     });
 
-    // Change event binding from .edit-btn to .book-card-clickable
     document.querySelectorAll('.book-card-clickable').forEach(card => {
         card.addEventListener('click', e => {
             const title = card.getAttribute('data-title');
             const author = card.getAttribute('data-author');
+            const publisher = card.getAttribute('data-publisher') || '';
             const status = card.getAttribute('data-status');
             const rating = parseInt(card.getAttribute('data-rating')) || 0;
 
             modalTitle.textContent = title;
             modalAuthor.textContent = author;
+            modalPublisher.textContent = publisher;
             bookTitleInput.value = title;
             bookAuthorInput.value = author;
             statusSelect.value = status;

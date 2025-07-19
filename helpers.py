@@ -5,11 +5,11 @@ import os
 from collections import Counter
 from dotenv import load_dotenv
 from datetime import datetime
+import json
 
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
 CACHE_DIR = 'cover_cache'
 
-# MariaDB connection parameters
 DB_CONFIG = {
     'user': os.getenv('BOOKVAULT_DBUSER'),
     'password': os.getenv('BOOKVAULT_DBPASS'),
@@ -40,15 +40,130 @@ def create_table():
     cur.close()
     conn.close()
 
+def ensure_book_metadata_columns():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS isbn VARCHAR(32)")
+    except mariadb.Error:
+        pass
+    try:
+        cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS series VARCHAR(255)")
+    except mariadb.Error:
+        pass
+    try:
+        cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS publisher VARCHAR(255)")
+    except mariadb.Error:
+        pass
+    try:
+        cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS publishedDate VARCHAR(32)")
+    except mariadb.Error:
+        pass
+    try:
+        cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS description TEXT")
+    except mariadb.Error:
+        pass
+    try:
+        cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS selfLink VARCHAR(512)")
+    except mariadb.Error:
+        pass
+    conn.commit()
+    cur.close()
+    conn.close()
+
+def get_google_books_metadata(title, author):
+    query = f"intitle:{title} inauthor:{author}"
+    url = f"https://www.googleapis.com/books/v1/volumes?q={requests.utils.quote(query)}&maxResults=1"
+    response = requests.get(url)
+    if response.status_code != 200:
+        return {}
+    data = response.json()
+    items = data.get("items", [])
+    if not items:
+        return {}
+    info = items[0].get("volumeInfo", {})
+    identifiers = info.get("industryIdentifiers", [])
+    isbn = None
+    for ident in identifiers:
+        if "ISBN" in ident.get("type", ""):
+            isbn = ident["identifier"]
+            break
+    seriesinfo = items[0].get("seriesInfo", {})
+    series = seriesinfo.get("title") or info.get("subtitle")
+    return {
+        "isbn": isbn,
+        "series": series,
+        "publisher": info.get("publisher"),
+        "publishedDate": info.get("publishedDate"),
+        "description": info.get("description"),
+        "selfLink": items[0].get("selfLink"),
+    }
+
+def get_google_books_metadata_by_isbn(isbn):
+    url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&maxResults=1"
+    response = requests.get(url)
+    if response.status_code != 200:
+        return {}
+    data = response.json()
+    items = data.get("items", [])
+    if not items:
+        return {}
+    info = items[0].get("volumeInfo", {})
+    identifiers = info.get("industryIdentifiers", [])
+    final_isbn = None
+    for ident in identifiers:
+        if "ISBN" in ident.get("type", ""):
+            final_isbn = ident["identifier"]
+            break
+    seriesinfo = items[0].get("seriesInfo", {})
+    series = seriesinfo.get("title") or info.get("subtitle")
+    return {
+        "isbn": final_isbn,
+        "series": series,
+        "publisher": info.get("publisher"),
+        "publishedDate": info.get("publishedDate"),
+        "description": info.get("description"),
+        "selfLink": items[0].get("selfLink"),
+    }
+
 def insert_book(book):
+    ensure_book_metadata_columns()
+    # If API book, attempt to enrich with metadata
+    if "isbn" not in book or book.get("isbn") is None:
+        if book.get("title") and book.get("author"):
+            meta = get_google_books_metadata(book["title"], book["author"])
+        elif book.get("isbn"):
+            meta = get_google_books_metadata_by_isbn(book["isbn"])
+        else:
+            meta = {}
+        for field in ["isbn", "series", "publisher", "publishedDate", "description", "selfLink"]:
+            if field in meta and meta[field] is not None:
+                book[field] = meta[field]
+            else:
+                book.setdefault(field, None)
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         now = datetime.now()
         cur.execute("""
-            INSERT INTO books (title, author, cover, status, last_status_change) VALUES (%s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE cover=VALUES(cover), status=status
-        """, (book['title'], book['author'], book['cover'], book['status'], now))
+            INSERT INTO books
+                (title, author, cover, status, last_status_change, isbn, series, publisher, publishedDate, description, selfLink)
+            VALUES
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                cover=VALUES(cover),
+                status=status,
+                isbn=VALUES(isbn),
+                series=VALUES(series),
+                publisher=VALUES(publisher),
+                publishedDate=VALUES(publishedDate),
+                description=VALUES(description),
+                selfLink=VALUES(selfLink)
+        """, (
+            book['title'], book['author'], book['cover'], book['status'], now,
+            book.get('isbn'), book.get('series'), book.get('publisher'),
+            book.get('publishedDate'), book.get('description'), book.get('selfLink')
+        ))
         conn.commit()
     except mariadb.Error as e:
         print(f"Error inserting book: {e}")
@@ -57,12 +172,15 @@ def insert_book(book):
         conn.close()
 
 def get_all_books():
+    ensure_book_metadata_columns()
     if not os.path.exists(CACHE_DIR):
         os.makedirs(CACHE_DIR)
 
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
-    cur.execute("SELECT id, title, author, cover, status, COALESCE(rating, 0) as rating, last_status_change FROM books")
+    cur.execute("""SELECT id, title, author, cover, status, COALESCE(rating, 0) as rating, last_status_change,
+                          isbn, series, publisher, publishedDate, description, selfLink
+                   FROM books""")
     books = cur.fetchall()
 
     for book in books:
@@ -75,7 +193,6 @@ def get_all_books():
                     with open(filename, 'wb') as f:
                         f.write(response.content)
             book['cover'] = filename if os.path.exists(filename) else None
-        # Format last_status_change as string if present
         if book['last_status_change']:
             book['last_status_change'] = book['last_status_change'].strftime("%Y-%m-%d %H:%M:%S")
 
@@ -98,7 +215,6 @@ def update_book_status(title, author, status):
         cur.close()
         conn.close()
 
-# Add this function to delete a book from DB
 def remove_book(title, author):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -121,11 +237,25 @@ def search_google_books_multiple(query, max_results=20):
     results = []
     for item in items:
         book_info = item["volumeInfo"]
+        identifiers = book_info.get("industryIdentifiers", [])
+        isbn = None
+        for ident in identifiers:
+            if "ISBN" in ident.get("type", ""):
+                isbn = ident["identifier"]
+                break
+        seriesinfo = item.get("seriesInfo", {})
+        series = seriesinfo.get("title") or book_info.get("subtitle")
         results.append({
             "title": book_info.get("title", "Unknown title"),
             "author": ", ".join(book_info.get("authors", ["Unknown author"])),
             "cover": book_info.get("imageLinks", {}).get("thumbnail",
-                                                        "https://via.placeholder.com/128x195?text=No+Cover")
+                                                        "https://via.placeholder.com/128x195?text=No+Cover"),
+            "isbn": isbn,
+            "series": series,
+            "publisher": book_info.get("publisher"),
+            "publishedDate": book_info.get("publishedDate"),
+            "description": book_info.get("description"),
+            "selfLink": item.get("selfLink"),
         })
     return results
 
@@ -135,7 +265,6 @@ def get_books_stats():
     status_breakdown = Counter(book['status'].strip() for book in books)
     author_breakdown = Counter(book['author'].strip() for book in books)
 
-    # Count books read by year of last_status_change
     read_years = Counter()
     for book in books:
         if book['status'].strip() == "Read" and book['last_status_change']:
@@ -148,14 +277,12 @@ def update_book_status_and_rating(title, author, status, rating):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # Add rating column if not exists (execute once)
         cur.execute("""
             ALTER TABLE books
             ADD COLUMN IF NOT EXISTS rating INT DEFAULT 0,
             ADD COLUMN IF NOT EXISTS last_status_change DATETIME DEFAULT NULL
         """)
     except mariadb.Error:
-        # Ignore if column already exists
         pass
     try:
         now = datetime.now()
@@ -169,7 +296,6 @@ def update_book_status_and_rating(title, author, status, rating):
         cur.close()
         conn.close()
 
-# Add this helper function for ISBN lookup
 def search_google_books_by_isbn(isbn):
     url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&maxResults=5"
     response = requests.get(url)
@@ -180,10 +306,24 @@ def search_google_books_by_isbn(isbn):
     results = []
     for item in items:
         book_info = item["volumeInfo"]
+        identifiers = book_info.get("industryIdentifiers", [])
+        fetched_isbn = None
+        for ident in identifiers:
+            if "ISBN" in ident.get("type", ""):
+                fetched_isbn = ident["identifier"]
+                break
+        seriesinfo = item.get("seriesInfo", {})
+        series = seriesinfo.get("title") or book_info.get("subtitle")
         results.append({
             "title": book_info.get("title", "Unknown title"),
             "author": ", ".join(book_info.get("authors", ["Unknown author"])),
             "cover": book_info.get("imageLinks", {}).get("thumbnail",
-                                                        "https://via.placeholder.com/128x195?text=No+Cover")
+                                                        "https://via.placeholder.com/128x195?text=No+Cover"),
+            "isbn": fetched_isbn,
+            "series": series,
+            "publisher": book_info.get("publisher"),
+            "publishedDate": book_info.get("publishedDate"),
+            "description": book_info.get("description"),
+            "selfLink": item.get("selfLink"),
         })
     return results

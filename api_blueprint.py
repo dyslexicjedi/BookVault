@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from helpers import search_google_books_by_isbn,insert_book
+from helpers import search_google_books_by_isbn, insert_book
 
 api_bp = Blueprint('api', __name__)
 
@@ -13,7 +13,6 @@ def api_isbn_lookup():
     isbn = request.form.get("isbn", "").strip()
     if not isbn:
         return "ISBN is required", 500
-    # Search Google Books by ISBN
     results = search_google_books_by_isbn(isbn)
     if len(results) == 1:
         book = results[0]
@@ -23,5 +22,4 @@ def api_isbn_lookup():
     elif len(results) > 1:
         return "Multiple books found?", 201
     else:
-        # No results found
         return "Not Found", 404

@@ -3,19 +3,23 @@ import requests
 import mariadb
 import os
 from collections import Counter
-from dotenv import load_dotenv
 from datetime import datetime
+
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
+
+
 from api_blueprint import api_bp
 from helpers import insert_book,search_google_books_by_isbn,search_google_books_multiple,get_all_books,update_book_status,remove_book,get_books_stats,create_table,update_book_status_and_rating
 
-load_dotenv(override=True)
+
 
 app = Flask(__name__)
 
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
 CACHE_DIR = 'cover_cache'
 
-# MariaDB connection parameters
 DB_CONFIG = {
     'user': os.getenv('BOOKVAULT_DBUSER'),
     'password': os.getenv('BOOKVAULT_DBPASS'),
@@ -24,14 +28,11 @@ DB_CONFIG = {
     'database': os.getenv('BOOKVAULT_DBNAME')
 }
 
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        # Use different form keys to distinguish actions:
         selected = request.form.get("selected_book")
         if selected:
-            # JSON string passed from form hidden input, parse it:
             import json
             book = json.loads(selected)
             book['status'] = "TBR"
@@ -42,7 +43,6 @@ def index():
         if query:
             results = search_google_books_multiple(query)
             if len(results) > 1:
-                # Show choices to user
                 books = get_all_books()
                 return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results)
             elif len(results) == 1:
@@ -51,7 +51,6 @@ def index():
                 insert_book(book)
                 return redirect(url_for("index"))
             else:
-                # no results found, just reload
                 return redirect(url_for("index"))
 
     books = get_all_books()
@@ -72,7 +71,6 @@ def update_status():
         update_book_status(title, author, new_status)
     return jsonify(success=True)
 
-# Add this new route
 @app.route("/remove_book", methods=["POST"])
 def remove_book_route():
     data = request.json
@@ -109,7 +107,6 @@ def isbn_lookup():
     isbn = request.form.get("isbn", "").strip()
     if not isbn:
         return redirect(url_for("index"))
-    # Search Google Books by ISBN
     results = search_google_books_by_isbn(isbn)
     if len(results) == 1:
         book = results[0]
@@ -120,7 +117,6 @@ def isbn_lookup():
         books = get_all_books()
         return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results)
     else:
-        # No results found
         return redirect(url_for("index"))
 
 app.register_blueprint(api_bp, url_prefix='/api')
