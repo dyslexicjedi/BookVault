@@ -9,7 +9,12 @@
         h1 { margin-bottom: 1.5rem; }
         .charts-wrapper { display: flex; flex-direction: column; gap: 2rem; }
         .chart-section { background: #fff; border-radius: 7px; box-shadow: 0 1px 6px #e0e0e0; padding: 1.5rem 1.5rem 1rem 1.5rem; }
-        .chart-container { max-width: 680px; width: 100%; margin: 0 auto; overflow-x: auto; }
+        .chart-container {
+            max-width: 1400px !important;
+            width: 100%;
+            margin: 0 auto;
+            overflow-x: auto;
+        }
         .d3-tooltip {
             position: absolute;
             pointer-events: none;
@@ -22,7 +27,7 @@
             display: none;
         }
         @media (max-width: 860px) {
-          .chart-container { max-width: 98vw; }
+          .chart-container { max-width: 98vw !important; }
           body { margin: 0.7rem; }
         }
         section, .chart-section { margin-bottom: 0; }
@@ -112,7 +117,7 @@
 
         // Add legend
         const legend = svg.append("g")
-            .attr("transform", `translate(${-width/2 + 15},${-height/2 + 15})`);
+            .attr("transform", `translate(${-width / 2 + 15},${radius + 20})`);
         legend.selectAll("rect")
             .data(statusData)
             .enter().append("rect")
@@ -135,8 +140,7 @@
 
         // Compute width from container
         const container = document.getElementById("author-line");
-        // Use full container width, fallback to 700 if unavailable
-        const width = Math.max((container ? container.getBoundingClientRect().width : 1100) - margin.left - margin.right);
+        const width = Math.max((container ? container.getBoundingClientRect().width : 1400) - margin.left - margin.right);
         const height = 340;
         const svg = d3.select("#author-line")
             .append("svg")
