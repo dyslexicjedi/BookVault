@@ -4,21 +4,20 @@ import mariadb
 import os
 from collections import Counter
 from datetime import datetime
+from werkzeug.utils import secure_filename
 
 from dotenv import load_dotenv
 load_dotenv(override=True)
-
 
 
 from api_blueprint import api_bp
 from helpers import insert_book,search_google_books_by_isbn,search_google_books_multiple,get_all_books,update_book_status,remove_book,get_books_stats,create_table,update_book_status_and_rating
 
 
-
-app = Flask(__name__)
-
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
 CACHE_DIR = 'cover_cache'
+UPLOAD_FOLDER = 'ebooks'
+
 
 DB_CONFIG = {
     'user': os.getenv('BOOKVAULT_DBUSER'),
@@ -27,6 +26,12 @@ DB_CONFIG = {
     'port': int(os.getenv('BOOKVAULT_DBPORT')),
     'database': os.getenv('BOOKVAULT_DBNAME')
 }
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 @app.route("/", methods=["GET", "POST"])
 def index():

@@ -4,3 +4,4 @@ cover_cache
 *.pyc
 temp.json
 update_books_with_isbn_series.py
+ebooks

@@ -29,15 +29,25 @@
                  data-publisher="{{ book.publisher|default('') }}"
                  data-status="{{ book.status }}"
                  data-rating="{{ book.rating|default(0) }}"
+                 data-book-id="{{ book.id }}"
+                 data-has-ebook="{{ 'true' if book.ebookpath else 'false' }}"
+                 data-ebook-path="{{ book.ebookpath or '' }}"
                  style="cursor: pointer;">
                 <img src="{{ book.cover }}" class="card-img-top" alt="Cover">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">{{ book.title }}</h5>
+                <div class="card-body d-flex flex-column position-relative">
+                    <h5 class="card-title">
+                        {{ book.title }}
+                    </h5>
                     <p class="card-text text-muted">{{ book.author }}</p>
                     <div class="d-flex justify-content-between align-items-center mt-auto">
                         <div class="text-muted small">
                             {{ book.status }}
                         </div>
+                        {% if book.ebookpath %}
+                        <div class="text-primary small" title="Ebook uploaded" style="font-size: 1.2rem;">
+                            &#128190;
+                        </div>
+{% endif %}
                         <div>
                             {% if book.rating %}
                                 <span style="color: #ffc107; font-weight: 500;">
@@ -46,12 +56,12 @@
 {% endif %}
         </div>
           </div>
-                </div>
             </div>
+          </div>
         </div>
         {% endfor %}
-</div>
         </div>
+      </div>
 
 {% if search_results %}
 <!-- Modal for multiple search results -->
@@ -93,10 +103,10 @@
 <!-- Edit Status and Rating Modal -->
 <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
   <div class="modal-dialog">
-    <form id="editForm">
+    <form id="editForm" enctype="multipart/form-data">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="editModalLabel">Edit Book Status & Rating</h5>
+          <h5 class="modal-title" id="editModalLabel">Edit Book Status, Rating & Upload Ebook</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
@@ -114,7 +124,7 @@
               {% endfor %}
             </select>
           </div>
-          <div>
+          <div class="mb-3">
             <label class="form-label d-block">Rating</label>
             <div id="starRating" class="star-rating" style="font-size: 1.5rem; cursor:pointer;">
               <span data-value="1" class="star">&#9733;</span>
@@ -124,17 +134,29 @@
               <span data-value="5" class="star">&#9733;</span>
             </div>
           </div>
+          <div class="mb-3" id="uploadSection">
+            <label for="ebookUpload" class="form-label">Upload Ebook (pdf, epub, mobi, azw3)</label>
+            <input class="form-control" type="file" id="ebookUpload" accept=".pdf,.epub,.mobi,.azw3">
+            <div id="uploadFeedback" class="form-text text-success" style="display:none;"></div>
+            <div id="uploadError" class="form-text text-danger" style="display:none;"></div>
         </div>
+          <div class="mb-3" id="downloadSection" style="display:none;">
+            <label class="form-label">Ebook Uploaded</label>
+            <br>
+            <a href="#" id="downloadLink" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">Download Ebook</a>
+      </div>
+      </div>
         <div class="modal-footer">
           <input type="hidden" id="bookTitleInput" name="title">
           <input type="hidden" id="bookAuthorInput" name="author">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save changes</button>
-        </div>
-      </div>
-    </form>
-  </div>
 </div>
+  </div>
+    </form>
+</div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     // Setup Edit Modal and star rating
@@ -147,6 +169,17 @@
     const bookAuthorInput = document.getElementById('bookAuthorInput');
     const starContainer = document.getElementById('starRating');
     let currentRating = 0;
+
+    // Add upload functionality vars
+    const ebookInput = document.getElementById('ebookUpload');
+    const uploadFeedback = document.getElementById('uploadFeedback');
+    const uploadError = document.getElementById('uploadError');
+    let currentBookId = null;
+
+    // For upload/download function toggle
+    const uploadSection = document.getElementById('uploadSection');
+    const downloadSection = document.getElementById('downloadSection');
+    const downloadLink = document.getElementById('downloadLink');
 
     function updateStars(rating) {
         const stars = starContainer.querySelectorAll('.star');
@@ -161,6 +194,16 @@
         });
     });
 
+    function getBookIdByTitleAuthor(title, author) {
+        const cards = document.querySelectorAll('.book-card-clickable');
+        for (const card of cards) {
+            if (card.getAttribute('data-title') === title && card.getAttribute('data-author') === author) {
+                return card.getAttribute('data-book-id');
+            }
+        }
+        return null;
+    }
+
     document.querySelectorAll('.book-card-clickable').forEach(card => {
         card.addEventListener('click', e => {
             const title = card.getAttribute('data-title');
@@ -168,6 +211,8 @@
             const publisher = card.getAttribute('data-publisher') || '';
             const status = card.getAttribute('data-status');
             const rating = parseInt(card.getAttribute('data-rating')) || 0;
+            const hasEbook = card.getAttribute('data-has-ebook') === 'true';
+            const ebookPath = card.getAttribute('data-ebook-path');
 
             modalTitle.textContent = title;
             modalAuthor.textContent = author;
@@ -177,37 +222,80 @@
             statusSelect.value = status;
             currentRating = rating;
             updateStars(currentRating);
+
+            // Set currentBookId for upload/download
+            currentBookId = getBookIdByTitleAuthor(title, author);
+
+            // Toggle upload/download sections
+            if (hasEbook && ebookPath) {
+                uploadSection.style.display = 'none';
+                downloadSection.style.display = 'block';
+                downloadLink.href = `/api/download_ebook/${currentBookId}`;
+      } else {
+                uploadSection.style.display = 'block';
+                downloadSection.style.display = 'none';
+                downloadLink.href = '#';
+      }
+
+            // Clear upload input and messages
+            ebookInput.value = '';
+            uploadFeedback.style.display = 'none';
+            uploadError.style.display = 'none';
+
             editModal.show();
-        });
+    });
     });
 
-    document.getElementById('editForm').addEventListener('submit', e => {
+    document.getElementById('editForm').addEventListener('submit', async e => {
         e.preventDefault();
         const title = bookTitleInput.value;
         const author = bookAuthorInput.value;
         const status = statusSelect.value;
         const rating = currentRating;
 
-        fetch('/update_status_rating', {
+        // First update status and rating
+        await fetch('/update_status_rating', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({title, author, status, rating})
-        }).then(() => {
-            location.reload();
         });
+
+        // Then handle ebook upload if file selected and currentBookId available
+        if (ebookInput.files.length > 0 && currentBookId) {
+            const formData = new FormData();
+            formData.append('ebook', ebookInput.files[0]);
+            const uploadResponse = await fetch(`/api/upload_ebook/${currentBookId}`, {
+                method: 'POST',
+                body: formData
+    });
+
+            const uploadResult = await uploadResponse.json();
+            if (uploadResult.success) {
+                uploadFeedback.style.display = 'block';
+                uploadFeedback.textContent = "Ebook uploaded successfully.";
+                uploadError.style.display = 'none';
+      } else {
+                uploadError.style.display = 'block';
+                uploadError.textContent = uploadResult.message || "Error uploading ebook.";
+                uploadFeedback.style.display = 'none';
+        }
+        }
+
+        // Reload page to reflect changes after short delay to show upload feedback
+        setTimeout(() => location.reload(), 800);
     });
 
     // Handle Add Book Form - change action and input name based on input value
     document.getElementById('addBookForm').addEventListener('submit', function(e) {
         const input = this.querySelector('input[name="search"], input[name="isbn"]');
-      const val = input.value.trim();
-      if (/^\d{10}$/.test(val) || /^\d{13}$/.test(val)) {
-        this.action = "{{ url_for('isbn_lookup') }}";
-        input.name = "isbn";
-      } else {
-        this.action = "{{ url_for('index') }}";
-        input.name = "search";
-      }
+        const val = input.value.trim();
+        if (/^\d{10}$/.test(val) || /^\d{13}$/.test(val)) {
+            this.action = "{{ url_for('isbn_lookup') }}";
+            input.name = "isbn";
+        } else {
+            this.action = "{{ url_for('index') }}";
+            input.name = "search";
+        }
     });
 </script>
 

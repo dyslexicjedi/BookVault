@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory, current_app
 import requests
 import mariadb
 import os
@@ -18,6 +18,11 @@ DB_CONFIG = {
     'database': os.getenv('BOOKVAULT_DBNAME')
 }
 
+def create_upload_folder():
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
+
 def get_db_connection():
     conn = mariadb.connect(**DB_CONFIG)
     return conn
@@ -33,6 +38,7 @@ def create_table():
             cover VARCHAR(512),
             status ENUM('TBR', 'Reading', 'Read', 'DNF') DEFAULT 'TBR',
             last_status_change DATETIME DEFAULT NULL,
+            ebookpath VARCHAR(255),
             UNIQUE KEY unique_book (title, author)
         )
     """)
@@ -179,7 +185,7 @@ def get_all_books():
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
     cur.execute("""SELECT id, title, author, cover, status, COALESCE(rating, 0) as rating, last_status_change,
-                          isbn, series, publisher, publishedDate, description, selfLink
+                          isbn, series, publisher, publishedDate, description, selfLink, ebookpath
                    FROM books""")
     books = cur.fetchall()
 
@@ -327,3 +333,29 @@ def search_google_books_by_isbn(isbn):
             "selfLink": item.get("selfLink"),
         })
     return results
+
+def update_book_ebook_path(bookid, save_path):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("Update books set ebookpath = %s where id = %s", (save_path, bookid))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        return False
+    
+def get_ebook_path_by_book_id(bookid):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT ebookpath FROM books WHERE id = %s", (bookid,))
+        data = cur.fetchone()
+        cur.close()
+        conn.close()
+        if data:
+            return data[0]
+        return None
+    except Exception as e:
+        return None
