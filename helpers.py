@@ -359,3 +359,24 @@ def get_ebook_path_by_book_id(bookid):
         return None
     except Exception as e:
         return None
+
+def get_read_authors():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    query = "SELECT DISTINCT author FROM books WHERE status = 'Read'"
+    cur.execute(query)
+    authors = [row[0] for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return authors
+
+def find_new_books_by_authors(authors):
+    new_books = []
+    for author in authors:
+        results = search_google_books_multiple(f"inauthor:{author}", max_results=5)  # You can tune max_results
+        # Filter out books that already exist in the database.
+        existing_titles = {book['title'].lower() for book in get_all_books() if book['author'].strip() == author}
+        for result in results:
+            if result['title'].lower() not in existing_titles:
+                new_books.append(result)
+    return new_books

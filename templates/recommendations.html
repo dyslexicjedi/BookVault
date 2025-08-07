@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Recommended Books</title>
+</head>
+<body>
+    <h1>Recommended Books By Authors You Have Read</h1>
+    <ul>
+        {% for book in books %}
+            <li>
+                <h3>{{ book.title }}</h3>
+                <p>Author: {{ book.author }}</p>
+                <p>Publisher: {{ book.publisher }}</p>
+                <p>Published: {{ book.publishedDate }}</p>
+                <p><img src="{{ book.cover }}" alt="Cover for {{ book.title }}"></p>
+                <p>{{ book.description }}</p>
+                <!-- Button to add book -->
+                <form action="{{ url_for('add_recommended_book') }}" method="POST" style="display: inline;">
+                    <input type="hidden" name="title" value="{{ book.title }}">
+                    <input type="hidden" name="author" value="{{ book.author }}">
+                    <input type="hidden" name="cover" value="{{ book.cover }}">
+                    <input type="hidden" name="publisher" value="{{ book.publisher }}">
+                    <input type="hidden" name="publishedDate" value="{{ book.publishedDate }}">
+                    <input type="hidden" name="description" value="{{ book.description }}">
+                    <input type="hidden" name="selfLink" value="{{ book.selfLink }}">
+                    <input type="hidden" name="isbn" value="{{ book.isbn }}">
+                    <input type="hidden" name="series" value="{{ book.series }}">
+                    <button type="submit">Add to TBR</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

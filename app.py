@@ -12,7 +12,7 @@ load_dotenv(override=True)
 
 from api_blueprint import api_bp
 from helpers import insert_book,search_google_books_by_isbn,search_google_books_multiple,get_all_books,update_book_status,remove_book,get_books_stats,create_table,update_book_status_and_rating
-
+from helpers import get_read_authors, find_new_books_by_authors
 
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
 CACHE_DIR = 'cover_cache'
@@ -123,6 +123,32 @@ def isbn_lookup():
         return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results)
     else:
         return redirect(url_for("index"))
+    
+@app.route("/recommendations")
+def recommendations():
+    authors = get_read_authors()
+    new_books = find_new_books_by_authors(authors)
+    return render_template("recommendations.html", books=new_books)
+
+@app.route("/add_recommended_book", methods=["POST"])
+def add_recommended_book():
+    # Extract book data from the form
+    book = {
+        'title': request.form.get('title'),
+        'author': request.form.get('author'),
+        'cover': request.form.get('cover'),
+        'status': 'TBR',
+        'isbn': request.form.get('isbn', None),
+        'series': request.form.get('series', None),
+        'publisher': request.form.get('publisher', None),
+        'publishedDate': request.form.get('publishedDate', None),
+        'description': request.form.get('description', None),
+        'selfLink': request.form.get('selfLink', None)
+    }
+    # Insert the book into the database
+    insert_book(book)
+    # Redirect back to the recommendations
+    return redirect(url_for('recommendations'))
 
 app.register_blueprint(api_bp, url_prefix='/api')
 
