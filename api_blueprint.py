@@ -2,7 +2,7 @@ import os
 from flask import Blueprint, jsonify, request, current_app, send_from_directory
 from helpers import search_google_books_by_isbn, insert_book
 from werkzeug.utils import secure_filename
-from helpers import update_book_ebook_path,get_ebook_path_by_book_id,create_upload_folder
+from helpers import update_book_ebook_path,get_ebook_path_by_book_id,create_upload_folder,update_physical_copy
 
 ALLOWED_EXTENSIONS = {'pdf', 'epub', 'mobi', 'azw3'}
 
@@ -58,3 +58,18 @@ def api_download_ebook(book_id):
         return send_from_directory(directory, filename, as_attachment=True)
     else:
         return jsonify(success=False, message="Ebook not found"), 404
+    
+@api_bp.route("/update_physical_copy/<int:book_id>/<int:status>", methods=["POST"])
+def api_update_physical_copy(book_id,status):
+    try:
+        physical_copy = bool(status)
+        if not physical_copy:
+            return jsonify(success=False, message="Physical copy status is required"), 400
+        success = update_physical_copy(book_id, physical_copy)
+        if success:
+            return jsonify(success=True, message="Physical copy updated successfully")
+        else:
+            return jsonify(success=False, message="Failed to update physical copy"), 500
+    except Exception as e:
+        print("Exception in Physical Copy Update %s"%e)
+        return jsonify(success=False, message="Failed to update physical copy"), 500

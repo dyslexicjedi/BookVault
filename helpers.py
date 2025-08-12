@@ -39,6 +39,7 @@ def create_table():
             status ENUM('TBR', 'Reading', 'Read', 'DNF') DEFAULT 'TBR',
             last_status_change DATETIME DEFAULT NULL,
             ebookpath VARCHAR(255),
+            physical_copy BOOL DEFAULT 0,
             UNIQUE KEY unique_book (title, author)
         )
     """)
@@ -185,7 +186,7 @@ def get_all_books():
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
     cur.execute("""SELECT id, title, author, cover, status, COALESCE(rating, 0) as rating, last_status_change,
-                          isbn, series, publisher, publishedDate, description, selfLink, ebookpath
+                          isbn, series, publisher, publishedDate, description, selfLink, ebookpath, physical_copy
                    FROM books""")
     books = cur.fetchall()
 
@@ -380,3 +381,15 @@ def find_new_books_by_authors(authors):
             if result['title'].lower() not in existing_titles:
                 new_books.append(result)
     return new_books
+
+def update_physical_copy(bookid, physical_copy):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE books SET physical_copy = %s WHERE id = %s", (physical_copy, bookid))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        return False

@@ -32,6 +32,7 @@
                  data-book-id="{{ book.id }}"
                  data-has-ebook="{{ 'true' if book.ebookpath else 'false' }}"
                  data-ebook-path="{{ book.ebookpath or '' }}"
+                 data-physical="{{ 'true' if book.physical_copy else 'false' }}"
                  style="cursor: pointer;">
                 <img src="{{ book.cover }}" class="card-img-top" alt="Cover">
                 <div class="card-body d-flex flex-column position-relative">
@@ -47,13 +48,18 @@
                         <div class="text-primary small" title="Ebook uploaded" style="font-size: 1.2rem;">
                             &#128190;
                         </div>
-{% endif %}
+                        {% endif %}
+                        {% if book.physical_copy %}
+                        <div class="text-primary small" title="Physical Copy" style="font-size: 1.2rem;">
+                          📖
+                        </div>
+                        {% endif %}
                         <div>
                             {% if book.rating %}
                                 <span style="color: #ffc107; font-weight: 500;">
                                     {{ book.rating }}&#9733;
                                 </span>
-{% endif %}
+                            {% endif %}
         </div>
           </div>
             </div>
@@ -145,6 +151,12 @@
             <br>
             <a href="#" id="downloadLink" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">Download Ebook</a>
       </div>
+          <div class="mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="physicalCopyToggle">
+              <label class="form-check-label" for="physicalCopyToggle">I own a physical copy of this book</label>
+            </div>
+          </div>
       </div>
         <div class="modal-footer">
           <input type="hidden" id="bookTitleInput" name="title">
@@ -168,6 +180,7 @@
     const bookTitleInput = document.getElementById('bookTitleInput');
     const bookAuthorInput = document.getElementById('bookAuthorInput');
     const starContainer = document.getElementById('starRating');
+    const modalphysical = document.getElementById('modalphysical')
     let currentRating = 0;
 
     // Add upload functionality vars
@@ -180,6 +193,9 @@
     const uploadSection = document.getElementById('uploadSection');
     const downloadSection = document.getElementById('downloadSection');
     const downloadLink = document.getElementById('downloadLink');
+
+    // Physical copy toggle
+    const physicalCopyToggle = document.getElementById('physicalCopyToggle');
 
     function updateStars(rating) {
         const stars = starContainer.querySelectorAll('.star');
@@ -213,6 +229,7 @@
             const rating = parseInt(card.getAttribute('data-rating')) || 0;
             const hasEbook = card.getAttribute('data-has-ebook') === 'true';
             const ebookPath = card.getAttribute('data-ebook-path');
+            const physical = card.getAttribute('data-physical') === 'true';
 
             modalTitle.textContent = title;
             modalAuthor.textContent = author;
@@ -221,10 +238,30 @@
             bookAuthorInput.value = author;
             statusSelect.value = status;
             currentRating = rating;
+
+            // Set physical copy toggle
+            const physicalCopyToggle = document.getElementById('physicalCopyToggle');
+            physicalCopyToggle.checked = physical;
+
+            // Set event listener for physical copy toggle
+            physicalCopyToggle.addEventListener('change', async () => {
+            const status = physicalCopyToggle.checked ? 1 : 0; 
+            try {
+                await fetch(`/api/update_physical_copy/${currentBookId}/${status}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                console.log('Physical copy status updated successfully');
+              } catch (error) {
+                console.error('Error updating physical copy status:', error);
+              }
+            });
+
             updateStars(currentRating);
 
             // Set currentBookId for upload/download
             currentBookId = getBookIdByTitleAuthor(title, author);
+            
 
             // Toggle upload/download sections
             if (hasEbook && ebookPath) {

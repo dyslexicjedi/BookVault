@@ -9,15 +9,25 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
-
 from api_blueprint import api_bp
-from helpers import insert_book,search_google_books_by_isbn,search_google_books_multiple,get_all_books,update_book_status,remove_book,get_books_stats,create_table,update_book_status_and_rating
-from helpers import get_read_authors, find_new_books_by_authors
+from helpers import (
+    insert_book,
+    search_google_books_by_isbn,
+    search_google_books_multiple,
+    get_all_books,
+    update_book_status,
+    remove_book,
+    get_books_stats,
+    create_table,
+    update_book_status_and_rating,
+    get_read_authors,
+    find_new_books_by_authors
+)
 
+# Configuration
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
 CACHE_DIR = 'cover_cache'
 UPLOAD_FOLDER = 'ebooks'
-
 
 DB_CONFIG = {
     'user': os.getenv('BOOKVAULT_DBUSER'),
@@ -27,6 +37,7 @@ DB_CONFIG = {
     'database': os.getenv('BOOKVAULT_DBNAME')
 }
 
+# App setup
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -36,6 +47,7 @@ if not os.path.exists(UPLOAD_FOLDER):
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
+        # Handle book selection
         selected = request.form.get("selected_book")
         if selected:
             import json
@@ -44,6 +56,7 @@ def index():
             insert_book(book)
             return redirect(url_for("index"))
 
+        # Handle search
         query = request.form.get("search")
         if query:
             results = search_google_books_multiple(query)
@@ -72,8 +85,10 @@ def update_status():
     title = data.get("title")
     author = data.get("author")
     new_status = data.get("status")
+    
     if new_status in STATUS_OPTIONS:
         update_book_status(title, author, new_status)
+    
     return jsonify(success=True)
 
 @app.route("/remove_book", methods=["POST"])
@@ -87,10 +102,11 @@ def remove_book_route():
 @app.route("/stats")
 def stats():
     total_books, status_breakdown, author_breakdown, read_years = get_books_stats()
-    return render_template("stats.html", total_books=total_books,
-                           status_breakdown=status_breakdown,
-                           author_breakdown=author_breakdown,
-                           read_years=read_years)
+    return render_template("stats.html", 
+                          total_books=total_books,
+                          status_breakdown=status_breakdown,
+                          author_breakdown=author_breakdown,
+                          read_years=read_years)
 
 @app.route('/cover_cache/<path:filename>')
 def serve_cover_cache(filename):
@@ -103,8 +119,10 @@ def update_status_rating():
     author = data.get("author")
     new_status = data.get("status")
     rating = data.get("rating", 0)
+    
     if new_status in STATUS_OPTIONS:
         update_book_status_and_rating(title, author, new_status, rating)
+    
     return jsonify(success=True)
 
 @app.route("/isbn_lookup", methods=["POST"])
@@ -112,6 +130,7 @@ def isbn_lookup():
     isbn = request.form.get("isbn", "").strip()
     if not isbn:
         return redirect(url_for("index"))
+    
     results = search_google_books_by_isbn(isbn)
     if len(results) == 1:
         book = results[0]
