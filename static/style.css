@@ -89,6 +89,7 @@ h1 {
     user-select: none;
     font-size: 1.55rem;
     transition: color 0.16s;
+    display: inline-block;
 }
 
 .star.selected,
@@ -117,4 +118,8 @@ h1 {
     box-shadow: 0 0.5px 3px #0001;
     margin-bottom: 6px;
     align-items: center;
+}
+.star:hover ~ .star:hover,
+.star:hover ~ .star {
+    color: #e4e5e9 !important;
 }

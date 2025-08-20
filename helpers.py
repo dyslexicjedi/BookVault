@@ -43,6 +43,28 @@ def create_table():
             UNIQUE KEY unique_book (title, author)
         )
     """)
+    
+    # Create tags table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tags (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) UNIQUE NOT NULL,
+            color VARCHAR(7) DEFAULT '#007bff',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Create book_tags junction table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS book_tags (
+            book_id INT,
+            tag_id INT,
+            PRIMARY KEY (book_id, tag_id),
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )
+    """)
+    
     conn.commit()
     cur.close()
     conn.close()
@@ -190,7 +212,16 @@ def get_all_books():
                    FROM books""")
     books = cur.fetchall()
 
+    # Get tags for each book
     for book in books:
+        cur.execute("""
+            SELECT t.id, t.name, t.color 
+            FROM tags t 
+            JOIN book_tags bt ON t.id = bt.tag_id 
+            WHERE bt.book_id = %s
+        """, (book['id'],))
+        book['tags'] = cur.fetchall()
+
         cover_url = book['cover']
         if cover_url:
             filename = os.path.join(CACHE_DIR, str(book['id']))
@@ -272,13 +303,19 @@ def get_books_stats():
     status_breakdown = Counter(book['status'].strip() for book in books)
     author_breakdown = Counter(book['author'].strip() for book in books)
 
+    # Tag breakdown
+    tag_breakdown = Counter()
+    for book in books:
+        for tag in book.get('tags', []):
+            tag_breakdown[tag['name']] += 1
+
     read_years = Counter()
     for book in books:
         if book['status'].strip() == "Read" and book['last_status_change']:
             year = datetime.strptime(book['last_status_change'], "%Y-%m-%d %H:%M:%S").year
             read_years[year] += 1
 
-    return total_books, status_breakdown, author_breakdown, read_years
+    return total_books, status_breakdown, author_breakdown, read_years, tag_breakdown
 
 def update_book_status_and_rating(title, author, status, rating):
     conn = get_db_connection()
@@ -393,3 +430,177 @@ def update_physical_copy(bookid, physical_copy):
         return True
     except Exception as e:
         return False
+
+# Tag management functions
+def create_tag(name, color='#007bff'):
+    """Create a new tag"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("INSERT INTO tags (name, color) VALUES (%s, %s)", (name, color))
+        conn.commit()
+        tag_id = cur.lastrowid
+        cur.close()
+        conn.close()
+        return tag_id
+    except mariadb.Error as e:
+        print(f"Error creating tag: {e}")
+        cur.close()
+        conn.close()
+        return None
+
+def get_all_tags():
+    """Get all available tags"""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM tags ORDER BY name")
+    tags = cur.fetchall()
+    cur.close()
+    conn.close()
+    return tags
+
+def add_tag_to_book(book_id, tag_id):
+    """Add a tag to a book"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("INSERT IGNORE INTO book_tags (book_id, tag_id) VALUES (%s, %s)", (book_id, tag_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except mariadb.Error as e:
+        print(f"Error adding tag to book: {e}")
+        cur.close()
+        conn.close()
+        return False
+
+def remove_tag_from_book(book_id, tag_id):
+    """Remove a tag from a book"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM book_tags WHERE book_id = %s AND tag_id = %s", (book_id, tag_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except mariadb.Error as e:
+        print(f"Error removing tag from book: {e}")
+        cur.close()
+        conn.close()
+        return False
+
+def get_book_tags(book_id):
+    """Get all tags for a specific book"""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("""
+        SELECT t.* FROM tags t 
+        JOIN book_tags bt ON t.id = bt.tag_id 
+        WHERE bt.book_id = %s
+    """, (book_id,))
+    tags = cur.fetchall()
+    cur.close()
+    conn.close()
+    return tags
+
+def delete_tag(tag_id):
+    """Delete a tag (this will also remove it from all books)"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM tags WHERE id = %s", (tag_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except mariadb.Error as e:
+        print(f"Error deleting tag: {e}")
+        cur.close()
+        conn.close()
+        return False
+
+def update_tag(tag_id, name, color):
+    """Update a tag's name and color"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE tags SET name = %s, color = %s WHERE id = %s", (name, color, tag_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except mariadb.Error as e:
+        print(f"Error updating tag: {e}")
+        cur.close()
+        conn.close()
+        return False
+
+def get_books_by_tag(tag_id):
+    """Get all books that have a specific tag"""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("""
+        SELECT b.* FROM books b 
+        JOIN book_tags bt ON b.id = bt.book_id 
+        WHERE bt.tag_id = %s
+    """, (tag_id,))
+    books = cur.fetchall()
+    cur.close()
+    conn.close()
+    return books
+
+def filter_books_by_tags(tag_ids):
+    """Filter books by multiple tags (books that have ALL specified tags)"""
+    if not tag_ids:
+        return get_all_books()
+    
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    
+    # Create placeholders for the IN clause
+    placeholders = ','.join(['%s'] * len(tag_ids))
+    
+    cur.execute(f"""
+        SELECT b.id, b.title, b.author, b.cover, b.status, COALESCE(b.rating, 0) as rating, 
+               b.last_status_change, b.isbn, b.series, b.publisher, b.publishedDate, 
+               b.description, b.selfLink, b.ebookpath, b.physical_copy
+        FROM books b
+        WHERE b.id IN (
+            SELECT bt.book_id 
+            FROM book_tags bt 
+            WHERE bt.tag_id IN ({placeholders})
+            GROUP BY bt.book_id 
+            HAVING COUNT(DISTINCT bt.tag_id) = %s
+        )
+    """, tag_ids + [len(tag_ids)])
+    
+    books = cur.fetchall()
+    
+    # Get tags for each book
+    for book in books:
+        cur.execute("""
+            SELECT t.id, t.name, t.color 
+            FROM tags t 
+            JOIN book_tags bt ON t.id = bt.tag_id 
+            WHERE bt.book_id = %s
+        """, (book['id'],))
+        book['tags'] = cur.fetchall()
+
+        # Handle cover caching
+        cover_url = book['cover']
+        if cover_url:
+            filename = os.path.join(CACHE_DIR, str(book['id']))
+            if not os.path.exists(filename):
+                response = requests.get(cover_url)
+                if response.status_code == 200:
+                    with open(filename, 'wb') as f:
+                        f.write(response.content)
+            book['cover'] = filename if os.path.exists(filename) else None
+        if book['last_status_change']:
+            book['last_status_change'] = book['last_status_change'].strftime("%Y-%m-%d %H:%M:%S")
+    
+    cur.close()
+    conn.close()
+    return books

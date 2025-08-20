@@ -21,7 +21,14 @@ from helpers import (
     create_table,
     update_book_status_and_rating,
     get_read_authors,
-    find_new_books_by_authors
+    find_new_books_by_authors,
+    get_all_tags,
+    create_tag,
+    add_tag_to_book,
+    remove_tag_from_book,
+    filter_books_by_tags,
+    delete_tag,
+    update_tag
 )
 
 # Configuration
@@ -62,7 +69,8 @@ def index():
             results = search_google_books_multiple(query)
             if len(results) > 1:
                 books = get_all_books()
-                return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results)
+                tags = get_all_tags()
+                return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results, tags=tags)
             elif len(results) == 1:
                 book = results[0]
                 book['status'] = "TBR"
@@ -71,8 +79,17 @@ def index():
             else:
                 return redirect(url_for("index"))
 
-    books = get_all_books()
-    return render_template("index.html", books=books, status_options=STATUS_OPTIONS)
+    # Handle tag filtering
+    selected_tags = request.args.getlist('tags')
+    if selected_tags:
+        # Convert string IDs to integers
+        tag_ids = [int(tag_id) for tag_id in selected_tags if tag_id.isdigit()]
+        books = filter_books_by_tags(tag_ids)
+    else:
+        books = get_all_books()
+    
+    tags = get_all_tags()
+    return render_template("index.html", books=books, status_options=STATUS_OPTIONS, tags=tags, selected_tags=selected_tags)
 
 @app.route("/api/get_books")
 def get_books():
@@ -101,12 +118,26 @@ def remove_book_route():
 
 @app.route("/stats")
 def stats():
-    total_books, status_breakdown, author_breakdown, read_years = get_books_stats()
+    color_scheme = [
+        "#3498db",  # Blue
+        "#e74c3c",  # Red
+        "#2ecc71",  # Green
+        "#f39c12",  # Orange
+        "#9b59b6",  # Purple
+        "#1abc9c",  # Turquoise
+        "#34495e",  # Dark Blue
+        "#e67e22",  # Carrot
+        "#16a085",  # Green Sea
+        "#8e44ad"   # Wisteria
+    ]
+    total_books, status_breakdown, author_breakdown, read_years, tag_breakdown = get_books_stats()
     return render_template("stats.html", 
                           total_books=total_books,
                           status_breakdown=status_breakdown,
                           author_breakdown=author_breakdown,
-                          read_years=read_years)
+                          read_years=read_years,
+                          tag_breakdown=tag_breakdown,
+                          color_scheme=color_scheme)
 
 @app.route('/cover_cache/<path:filename>')
 def serve_cover_cache(filename):
@@ -168,6 +199,70 @@ def add_recommended_book():
     insert_book(book)
     # Redirect back to the recommendations
     return redirect(url_for('recommendations'))
+
+# Tag management routes
+@app.route("/tags")
+def manage_tags():
+    tags = get_all_tags()
+    return render_template("tags.html", tags=tags)
+
+@app.route("/create_tag", methods=["POST"])
+def create_tag_route():
+    data = request.json
+    name = data.get("name", "").strip()
+    color = data.get("color", "#007bff")
+    
+    if name:
+        tag_id = create_tag(name, color)
+        if tag_id:
+            return jsonify(success=True, tag_id=tag_id)
+        else:
+            return jsonify(success=False, message="Tag already exists or error creating tag")
+    return jsonify(success=False, message="Tag name is required")
+
+@app.route("/update_tag", methods=["POST"])
+def update_tag_route():
+    data = request.json
+    tag_id = data.get("tag_id")
+    name = data.get("name", "").strip()
+    color = data.get("color", "#007bff")
+    
+    if tag_id and name:
+        success = update_tag(tag_id, name, color)
+        return jsonify(success=success)
+    return jsonify(success=False, message="Tag ID and name are required")
+
+@app.route("/delete_tag", methods=["POST"])
+def delete_tag_route():
+    data = request.json
+    tag_id = data.get("tag_id")
+    
+    if tag_id:
+        success = delete_tag(tag_id)
+        return jsonify(success=success)
+    return jsonify(success=False, message="Tag ID is required")
+
+@app.route("/add_tag_to_book", methods=["POST"])
+def add_tag_to_book_route():
+    data = request.json
+    book_id = data.get("book_id")
+    tag_id = data.get("tag_id")
+    
+    if book_id and tag_id:
+        success = add_tag_to_book(book_id, tag_id)
+        return jsonify(success=success)
+    return jsonify(success=False, message="Book ID and Tag ID are required")
+
+@app.route("/remove_tag_from_book", methods=["POST"])
+def remove_tag_from_book_route():
+    data = request.json
+    book_id = data.get("book_id")
+    tag_id = data.get("tag_id")
+    
+    if book_id and tag_id:
+        success = remove_tag_from_book(book_id, tag_id)
+        return jsonify(success=success)
+    return jsonify(success=False, message="Book ID and Tag ID are required")
 
 app.register_blueprint(api_bp, url_prefix='/api')
 

@@ -5,10 +5,45 @@
     <title>Library Statistics</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 2rem; background: #fcfcfc; }
-        h1 { margin-bottom: 1.5rem; }
-        .charts-wrapper { display: flex; flex-direction: column; gap: 2rem; }
-        .chart-section { background: #fff; border-radius: 7px; box-shadow: 0 1px 6px #e0e0e0; padding: 1.5rem 1.5rem 1rem 1.5rem; }
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2c3e50;
+            --accent-color: #e74c3c;
+            --light-bg: #f8f9fa;
+            --dark-text: #2c3e50;
+            --light-text: #7f8c8d;
+            --border-color: #e0e0e0;
+            --shadow: 0 4px 12px rgba(0,0,0,0.08);
+            --transition: all 0.3s ease;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 2rem; 
+            background: var(--light-bg); 
+            color: var(--dark-text);
+        }
+        h1 { 
+            margin-bottom: 1.5rem; 
+            color: var(--secondary-color);
+            border-bottom: 3px solid var(--primary-color);
+            padding-bottom: 0.5rem;
+        }
+        .charts-wrapper { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 2rem; 
+        }
+        .chart-section { 
+            background: #fff; 
+            border-radius: 12px; 
+            box-shadow: var(--shadow); 
+            padding: 1.5rem 1.5rem 1rem 1.5rem; 
+            transition: var(--transition);
+        }
+        .chart-section:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
         .chart-container {
             max-width: 1400px !important;
             width: 100%;
@@ -20,11 +55,13 @@
             pointer-events: none;
             background: rgba(0,0,0,0.9);
             color: #fff;
-            padding: 0.3rem 0.6rem;
-            border-radius: 4px;
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
             font-size: 0.95rem;
             z-index: 10;
             display: none;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
         @media (max-width: 860px) {
           .chart-container { max-width: 98vw !important; }
@@ -34,6 +71,34 @@
         table { border-collapse: collapse; width: 100%; }
         th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
         th { background-color: #f0f0f0; }
+        h1 {
+            margin-bottom: 1.5rem;
+            color: #2c3e50;
+            font-weight: 600;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 0.5rem;
+        }
+        h2 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            color: #34495e;
+            font-size: 1.2rem;
+        }
+        .charts-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .chart-section {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 1.5rem 1.5rem 1rem 1.5rem;
+            transition: box-shadow 0.3s ease;
+        }
+        .chart-section:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
     </style>
 </head>
 <body>
@@ -65,6 +130,13 @@
         <h2>Breakdown by Author</h2>
         <div id="author-line" class="chart-container"></div>
     </section>
+    
+    {% if tag_breakdown %}
+    <section class="chart-section">
+        <h2>Breakdown by Tags</h2>
+        <div id="tag-bar" class="chart-container"></div>
+    </section>
+    {% endif %}
     </div>
     <p style="margin-top:2rem;"><a href="{{ url_for('index') }}">Back to Library</a></p>
     <div id="d3-tooltip" class="d3-tooltip"></div>
@@ -83,6 +155,13 @@
             {% for author, count in author_breakdown.items() %}
                 {author: `{{ author | e }}`, count: {{ count }}},
             {% endfor %}
+        ];
+        const tagData = [
+            {% if tag_breakdown %}
+            {% for tag, count in tag_breakdown.items() %}
+                {tag: "{{ tag | e }}", count: {{ count }}},
+            {% endfor %}
+            {% endif %}
         ];
     </script>
     <script>
