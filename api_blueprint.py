@@ -1,6 +1,6 @@
 import os
 from flask import Blueprint, jsonify, request, current_app, send_from_directory
-from helpers import search_google_books_by_isbn, insert_book
+from helpers import search_google_books_by_isbn, insert_book, get_all_books, filter_books
 from werkzeug.utils import secure_filename
 from helpers import update_book_ebook_path,get_ebook_path_by_book_id,create_upload_folder,update_physical_copy
 
@@ -14,6 +14,32 @@ def allowed_file(filename):
 @api_bp.route('/sample')
 def sample_api():
     return jsonify(message="This is a sample API endpoint.")
+
+@api_bp.route('/get_books')
+def api_get_books():
+    """Get books with optional filtering"""
+    # Get filter parameters from query string
+    status_filters = request.args.getlist('status_filter')
+    format_filters = request.args.getlist('format_filter')
+    rating_filters = request.args.getlist('rating_filter')
+    tag_ids = request.args.getlist('tags')
+    
+    # Convert tag IDs to integers
+    if tag_ids:
+        tag_ids = [int(tag_id) for tag_id in tag_ids if tag_id.isdigit()]
+    
+    # Check if any filters are applied
+    if status_filters or format_filters or rating_filters or tag_ids:
+        books = filter_books(
+            status_filters=status_filters if status_filters else None,
+            format_filters=format_filters if format_filters else None,
+            rating_filters=rating_filters if rating_filters else None,
+            tag_ids=tag_ids if tag_ids else None
+        )
+    else:
+        books = get_all_books()
+    
+    return jsonify(books)
 
 @api_bp.route("/isbn_lookup", methods=["POST"])
 def api_isbn_lookup():

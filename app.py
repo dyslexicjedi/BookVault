@@ -27,6 +27,7 @@ from helpers import (
     add_tag_to_book,
     remove_tag_from_book,
     filter_books_by_tags,
+    filter_books,
     delete_tag,
     update_tag
 )
@@ -79,22 +80,62 @@ def index():
             else:
                 return redirect(url_for("index"))
 
-    # Handle tag filtering
+    # Handle filtering
     selected_tags = request.args.getlist('tags')
-    if selected_tags:
-        # Convert string IDs to integers
-        tag_ids = [int(tag_id) for tag_id in selected_tags if tag_id.isdigit()]
-        books = filter_books_by_tags(tag_ids)
+    selected_status = request.args.getlist('status_filter')
+    selected_formats = request.args.getlist('format_filter')
+    selected_ratings = request.args.getlist('rating_filter')
+    
+    # Check if any filters are applied
+    if selected_tags or selected_status or selected_formats or selected_ratings:
+        # Convert string IDs to integers for tags
+        tag_ids = [int(tag_id) for tag_id in selected_tags if tag_id.isdigit()] if selected_tags else None
+        
+        # Filter books using the new filter function
+        books = filter_books(
+            status_filters=selected_status if selected_status else None,
+            format_filters=selected_formats if selected_formats else None,
+            rating_filters=selected_ratings if selected_ratings else None,
+            tag_ids=tag_ids
+        )
     else:
         books = get_all_books()
     
     tags = get_all_tags()
-    return render_template("index.html", books=books, status_options=STATUS_OPTIONS, tags=tags, selected_tags=selected_tags)
+    return render_template("index.html", 
+                         books=books, 
+                         status_options=STATUS_OPTIONS, 
+                         tags=tags, 
+                         selected_tags=selected_tags,
+                         selected_status=selected_status,
+                         selected_formats=selected_formats,
+                         selected_ratings=selected_ratings)
 
 @app.route("/api/get_books")
 def get_books():
-    books = get_all_books()
-    return books
+    """Get books with optional filtering - kept for backward compatibility"""
+    # Get filter parameters from query string
+    status_filters = request.args.getlist('status_filter')
+    format_filters = request.args.getlist('format_filter')
+    rating_filters = request.args.getlist('rating_filter')
+    tag_ids = request.args.getlist('tags')
+    
+    # Convert tag IDs to integers
+    if tag_ids:
+        tag_ids = [int(tag_id) for tag_id in tag_ids if tag_id.isdigit()]
+    
+    # Check if any filters are applied
+    if status_filters or format_filters or rating_filters or tag_ids:
+        books = filter_books(
+            status_filters=status_filters if status_filters else None,
+            format_filters=format_filters if format_filters else None,
+            rating_filters=rating_filters if rating_filters else None,
+            tag_ids=tag_ids if tag_ids else None
+        )
+    else:
+        books = get_all_books()
+    
+    return jsonify(books)
 
 @app.route("/update_status", methods=["POST"])
 def update_status():
@@ -197,8 +238,8 @@ def add_recommended_book():
     }
     # Insert the book into the database
     insert_book(book)
-    # Redirect back to the recommendations
-    return redirect(url_for('recommendations'))
+    # Redirect back to the recommendations with success parameter
+    return redirect(url_for('recommendations', added='true'))
 
 # Tag management routes
 @app.route("/tags")

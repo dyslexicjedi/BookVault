@@ -21,39 +21,6 @@
 
     <!-- Filter and Stats Section -->
     <div class="row mb-4">
-        {% if tags %}
-        <div class="col-lg-8">
-            <div class="card filter-section">
-                <div class="card-body">
-                    <h6 class="card-title mb-3">
-                        <i class="bi bi-funnel me-2"></i>Filter by Tags
-                    </h6>
-                    <form method="GET" action="{{ url_for('index') }}" id="tagFilterForm">
-                        <div class="d-flex flex-wrap gap-2 mb-3">
-                            {% for tag in tags %}
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="tags" value="{{ tag.id }}" 
-                                       id="tag{{ tag.id }}" {% if tag.id|string in selected_tags %}checked{% endif %}
-                                       onchange="document.getElementById('tagFilterForm').submit();">
-                                <label class="form-check-label" for="tag{{ tag.id }}">
-                                    <span class="badge" style="background-color: {{ tag.color }}; color: white;">
-                                        <i class="bi bi-tag me-1"></i>{{ tag.name }}
-                                    </span>
-                                </label>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% if selected_tags %}
-                        <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-x-circle me-1"></i>Clear Filters
-                        </a>
-                        {% endif %}
-                    </form>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        
         <div class="col">
             <div class="row">
                 <div class="col-md-3">
@@ -102,6 +69,157 @@
                 </div>
             </div>
         </div>
+        <div class="col-lg-4">
+            <div class="card filter-section">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-funnel me-2"></i>Filter Books
+                        </h6>
+                        <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse">
+                            <i class="bi bi-chevron-down" id="filterToggleIcon"></i>
+                            <span id="filterToggleText">Show Filters</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Active Filters Summary -->
+                    {% if selected_tags or selected_status or selected_formats or selected_ratings %}
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <i class="bi bi-filter me-1"></i>{{ books|length }} book{{ 's' if books|length != 1 else '' }} found with active filters
+                        </small>
+                        <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-danger ms-2" style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
+                            <i class="bi bi-x me-1"></i>Clear All
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="collapse" id="filterCollapse">
+                        <form method="GET" action="{{ url_for('index') }}" id="filterForm">
+                        
+                            <!-- Status Filter -->
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-2" style="font-size: 0.9rem;">
+                                    <i class="bi bi-bookmark me-1"></i>Status
+                                </h6>
+                                <div class="d-flex flex-wrap gap-1">
+                                    {% for status in status_options %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="status_filter" value="{{ status }}" 
+                                               id="status{{ status }}" {% if status in selected_status %}checked{% endif %}
+                                               onchange="document.getElementById('filterForm').submit();">
+                                        <label class="form-check-label" for="status{{ status }}">
+                                            <span class="badge bg-secondary" style="font-size: 0.7rem;">
+                                                {{ status }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Format Filter -->
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-2" style="font-size: 0.9rem;">
+                                    <i class="bi bi-collection me-1"></i>Format
+                                </h6>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="format_filter" value="ebook" 
+                                               id="filterEbook" {% if 'ebook' in selected_formats %}checked{% endif %}
+                                               onchange="document.getElementById('filterForm').submit();">
+                                        <label class="form-check-label" for="filterEbook">
+                                            <span class="badge bg-primary" style="font-size: 0.7rem;">
+                                                <i class="bi bi-file-earmark-pdf me-1"></i>Ebook
+                                            </span>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="format_filter" value="physical" 
+                                               id="filterPhysical" {% if 'physical' in selected_formats %}checked{% endif %}
+                                               onchange="document.getElementById('filterForm').submit();">
+                                        <label class="form-check-label" for="filterPhysical">
+                                            <span class="badge bg-success" style="font-size: 0.7rem;">
+                                                <i class="bi bi-book me-1"></i>Physical
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rating Filter -->
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-2" style="font-size: 0.9rem;">
+                                    <i class="bi bi-star me-1"></i>Rating
+                                </h6>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="rating_filter" value="rated" 
+                                               id="filterRated" {% if 'rated' in selected_ratings %}checked{% endif %}
+                                               onchange="document.getElementById('filterForm').submit();">
+                                        <label class="form-check-label" for="filterRated">
+                                            <span class="badge bg-warning text-dark" style="font-size: 0.7rem;">
+                                                <i class="bi bi-star-fill me-1"></i>Rated
+                                            </span>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="rating_filter" value="unrated" 
+                                               id="filterUnrated" {% if 'unrated' in selected_ratings %}checked{% endif %}
+                                               onchange="document.getElementById('filterForm').submit();">
+                                        <label class="form-check-label" for="filterUnrated">
+                                            <span class="badge bg-secondary" style="font-size: 0.7rem;">
+                                                <i class="bi bi-star me-1"></i>Unrated
+                                            </span>
+                                        </label>
+                                    </div>
+                                    {% for rating in range(5, 0, -1) %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="rating_filter" value="{{ rating }}star" 
+                                               id="filter{{ rating }}Star" {% if (rating ~ 'star') in selected_ratings %}checked{% endif %}
+                                               onchange="document.getElementById('filterForm').submit();">
+                                        <label class="form-check-label" for="filter{{ rating }}Star">
+                                            <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">
+                                                {% for i in range(rating) %}
+                                                <i class="bi bi-star-fill"></i>
+                                                {% endfor %}
+                                                {% if rating < 5 %}+{% endif %}
+                                            </span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Tags Filter -->
+                            {% if tags %}
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-2" style="font-size: 0.9rem;">
+                                    <i class="bi bi-tag me-1"></i>Tags
+                                </h6>
+                                <div class="d-flex flex-wrap gap-1">
+                                    {% for tag in tags %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="tags" value="{{ tag.id }}" 
+                                               id="tag{{ tag.id }}" {% if tag.id|string in selected_tags %}checked{% endif %}
+                                               onchange="document.getElementById('filterForm').submit();">
+                                        <label class="form-check-label" for="tag{{ tag.id }}">
+                                            <span class="badge" style="background-color: {{ tag.color }}; color: white; font-size: 0.7rem;">
+                                                {{ tag.name }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
     </div>
 
     <!-- Books Grid -->
@@ -465,6 +583,30 @@
             input.name = "search";
         }
     });
+
+    // Filter collapse toggle
+    const filterCollapse = document.getElementById('filterCollapse');
+    const filterToggleIcon = document.getElementById('filterToggleIcon');
+    const filterToggleText = document.getElementById('filterToggleText');
+    
+    if (filterCollapse) {
+        filterCollapse.addEventListener('show.bs.collapse', function () {
+            filterToggleIcon.className = 'bi bi-chevron-up';
+            filterToggleText.textContent = 'Hide Filters';
+        });
+        
+        filterCollapse.addEventListener('hide.bs.collapse', function () {
+            filterToggleIcon.className = 'bi bi-chevron-down';
+            filterToggleText.textContent = 'Show Filters';
+        });
+        
+        // Auto-expand if filters are active
+        {% if selected_tags or selected_status or selected_formats or selected_ratings %}
+        const collapse = new bootstrap.Collapse(filterCollapse, {
+            show: true
+        });
+        {% endif %}
+    }
 
     // Tag management functions
     async function loadBookTags(bookId) {

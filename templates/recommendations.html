@@ -1,35 +1,313 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Recommended Books</title>
-</head>
-<body>
-    <h1>Recommended Books By Authors You Have Read</h1>
-    <ul>
+{% extends "base.html" %}
+
+{% block title %}Discover Books - Book Vault{% endblock %}
+
+{% block head %}
+<style>
+    .recommendations-hero {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+        text-align: center;
+    }
+    
+    .recommendation-card {
+        background: var(--bs-card-bg, #ffffff);
+        border-radius: 20px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    
+    .recommendation-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        transform: scaleX(0);
+        transition: transform 0.3s;
+    }
+    
+    .recommendation-card:hover::before {
+        transform: scaleX(1);
+    }
+    
+    .recommendation-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    .recommendation-card .card-img-top {
+        height: 320px;
+        object-fit: contain;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 1rem;
+    }
+    
+    .recommendation-card .card-body {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+    
+    .recommendation-card .card-title {
+        font-family: 'Playfair Display', serif;
+        font-weight: 600;
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    .recommendation-card .card-text {
+        font-size: 0.95rem;
+        color: var(--bs-secondary);
+        margin-bottom: 0.5rem;
+    }
+    
+    .recommendation-card .description {
+        font-size: 0.9rem;
+        color: var(--bs-secondary);
+        line-height: 1.6;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 1rem;
+        flex-grow: 1;
+    }
+    
+    .recommendation-card .metadata {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+    }
+    
+    .recommendation-card .metadata .badge {
+        padding: 0.4rem 0.8rem;
+    }
+    
+    .add-btn {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 50px;
+        font-weight: 600;
+        transition: all 0.3s;
+        box-shadow: 0 4px 15px rgba(240, 147, 251, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .add-btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+        transition: left 0.5s;
+    }
+    
+    .add-btn:hover::before {
+        left: 100%;
+    }
+    
+    .add-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(240, 147, 251, 0.4);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: var(--bs-card-bg, #ffffff);
+        border-radius: 20px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .empty-state i {
+        font-size: 5rem;
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    @media (max-width: 768px) {
+        .recommendation-card .card-img-top {
+            height: 250px;
+        }
+    }
+    
+    .toast-container {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 9999;
+    }
+    
+    .custom-toast {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
+    }
+    
+    .custom-toast .btn-close {
+        filter: invert(1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Toast Notification -->
+<div class="toast-container">
+    <div id="successToast" class="toast custom-toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header" style="background: rgba(255, 255, 255, 0.2); color: white; border: none;">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <strong class="me-auto">Success!</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" style="font-weight: 500;">
+            Book added to your library!
+        </div>
+    </div>
+</div>
+
+<div class="container my-5">
+    <!-- Hero Section -->
+    <div class="recommendations-hero fade-in-up">
+        <h1 class="display-4 mb-3 fw-bold">💡 Discover New Books</h1>
+        <p class="lead mb-0">Recommendations based on authors you've read</p>
+        {% if books and books|length > 0 %}
+        <div class="mt-3">
+            <span class="badge bg-light text-dark" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                <i class="bi bi-stars me-2"></i>{{ books|length }} new book{{ 's' if books|length != 1 else '' }} found
+            </span>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if books and books|length > 0 %}
+    <!-- Books Grid -->
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
         {% for book in books %}
-            <li>
-                <h3>{{ book.title }}</h3>
-                <p>Author: {{ book.author }}</p>
-                <p>Publisher: {{ book.publisher }}</p>
-                <p>Published: {{ book.publishedDate }}</p>
-                <p><img src="{{ book.cover }}" alt="Cover for {{ book.title }}"></p>
-                <p>{{ book.description }}</p>
-                <!-- Button to add book -->
-                <form action="{{ url_for('add_recommended_book') }}" method="POST" style="display: inline;">
-                    <input type="hidden" name="title" value="{{ book.title }}">
-                    <input type="hidden" name="author" value="{{ book.author }}">
-                    <input type="hidden" name="cover" value="{{ book.cover }}">
-                    <input type="hidden" name="publisher" value="{{ book.publisher }}">
-                    <input type="hidden" name="publishedDate" value="{{ book.publishedDate }}">
-                    <input type="hidden" name="description" value="{{ book.description }}">
-                    <input type="hidden" name="selfLink" value="{{ book.selfLink }}">
-                    <input type="hidden" name="isbn" value="{{ book.isbn }}">
-                    <input type="hidden" name="series" value="{{ book.series }}">
-                    <button type="submit">Add to TBR</button>
-                </form>
-            </li>
+        <div class="col">
+            <div class="recommendation-card fade-in-up" style="animation-delay: {{ loop.index0 * 0.1 }}s;">
+                <img src="{{ book.cover }}" class="card-img-top" alt="Cover for {{ book.title }}">
+                <div class="card-body">
+                    <h5 class="card-title">{{ book.title }}</h5>
+                    <p class="card-text">
+                        <i class="bi bi-person-fill me-1"></i>
+                        {{ book.author }}
+                    </p>
+                    
+                    <div class="metadata">
+                        {% if book.publisher %}
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-building me-1"></i>
+                            {{ book.publisher }}
+                        </span>
+                        {% endif %}
+                        {% if book.publishedDate %}
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-calendar-event me-1"></i>
+                            {{ book.publishedDate[:4] }}
+                        </span>
+                        {% endif %}
+                        {% if book.series %}
+                        <span class="badge bg-primary">
+                            <i class="bi bi-collection me-1"></i>
+                            Series
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    {% if book.description %}
+                    <div class="description">
+                        {{ book.description }}
+                    </div>
+                    {% endif %}
+                    
+                    <form action="{{ url_for('add_recommended_book') }}" method="POST" class="mt-auto">
+                        <input type="hidden" name="title" value="{{ book.title }}">
+                        <input type="hidden" name="author" value="{{ book.author }}">
+                        <input type="hidden" name="cover" value="{{ book.cover }}">
+                        <input type="hidden" name="publisher" value="{{ book.publisher or '' }}">
+                        <input type="hidden" name="publishedDate" value="{{ book.publishedDate or '' }}">
+                        <input type="hidden" name="description" value="{{ book.description or '' }}">
+                        <input type="hidden" name="selfLink" value="{{ book.selfLink or '' }}">
+                        <input type="hidden" name="isbn" value="{{ book.isbn or '' }}">
+                        <input type="hidden" name="series" value="{{ book.series or '' }}">
+                        <button type="submit" class="add-btn w-100">
+                            <i class="bi bi-plus-circle me-2"></i>Add to TBR
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
         {% endfor %}
-    </ul>
-</body>
-</html>
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="empty-state fade-in-up">
+        <i class="bi bi-lightbulb"></i>
+        <h3 class="mt-4 mb-3">No Recommendations Yet</h3>
+        <p class="text-muted mb-4">
+            Start reading and marking books as "Read" to get personalized recommendations<br>
+            from authors you love!
+        </p>
+        <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+            <i class="bi bi-arrow-left me-2"></i>Back to Library
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Check if we just added a book
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('added') === 'true') {
+        // Show toast notification
+        const toastEl = document.getElementById('successToast');
+        const toast = new bootstrap.Toast(toastEl, {
+            autohide: true,
+            delay: 3000
+        });
+        toast.show();
+        
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
+    // Show confirmation before adding book
+    document.querySelectorAll('form[action*="add_recommended_book"]').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const button = this.querySelector('button[type="submit"]');
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+        });
+    });
+</script>
+{% endblock %}

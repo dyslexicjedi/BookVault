@@ -410,13 +410,22 @@ def get_read_authors():
 
 def find_new_books_by_authors(authors):
     new_books = []
+    # Get all existing books once to avoid multiple DB calls
+    existing_books = get_all_books()
+    # Create a set of (title, author) tuples for quick lookup
+    existing_book_keys = {
+        (book['title'].lower().strip(), book['author'].lower().strip()) 
+        for book in existing_books
+    }
+    
     for author in authors:
         results = search_google_books_multiple(f"inauthor:{author}", max_results=5)  # You can tune max_results
-        # Filter out books that already exist in the database.
-        existing_titles = {book['title'].lower() for book in get_all_books() if book['author'].strip() == author}
         for result in results:
-            if result['title'].lower() not in existing_titles:
+            # Check if this book (by title and author) already exists in the library
+            book_key = (result['title'].lower().strip(), result['author'].lower().strip())
+            if book_key not in existing_book_keys:
                 new_books.append(result)
+    
     return new_books
 
 def update_physical_copy(bookid, physical_copy):
@@ -601,6 +610,103 @@ def filter_books_by_tags(tag_ids):
         if book['last_status_change']:
             book['last_status_change'] = book['last_status_change'].strftime("%Y-%m-%d %H:%M:%S")
     
+    cur.close()
+    conn.close()
+    return books
+
+def filter_books(status_filters=None, format_filters=None, rating_filters=None, tag_ids=None):
+    """Filter books by multiple criteria"""
+    ensure_book_metadata_columns()
+    if not os.path.exists(CACHE_DIR):
+        os.makedirs(CACHE_DIR)
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    
+    # Base query
+    query = """
+        SELECT DISTINCT b.id, b.title, b.author, b.cover, b.status, COALESCE(b.rating, 0) as rating, 
+               b.last_status_change, b.isbn, b.series, b.publisher, b.publishedDate, 
+               b.description, b.selfLink, b.ebookpath, b.physical_copy
+        FROM books b
+    """
+    
+    conditions = []
+    params = []
+    
+    # Add tag filter if specified
+    if tag_ids:
+        query += " JOIN book_tags bt ON b.id = bt.book_id"
+        placeholders = ','.join(['%s'] * len(tag_ids))
+        conditions.append(f"bt.tag_id IN ({placeholders})")
+        params.extend(tag_ids)
+    
+    # Add status filter
+    if status_filters:
+        status_placeholders = ','.join(['%s'] * len(status_filters))
+        conditions.append(f"b.status IN ({status_placeholders})")
+        params.extend(status_filters)
+    
+    # Add format filters
+    if format_filters:
+        format_conditions = []
+        if 'ebook' in format_filters:
+            format_conditions.append("b.ebookpath IS NOT NULL AND b.ebookpath != ''")
+        if 'physical' in format_filters:
+            format_conditions.append("b.physical_copy = 1")
+        if format_conditions:
+            conditions.append(f"({' OR '.join(format_conditions)})")
+    
+    # Add rating filters
+    if rating_filters:
+        rating_conditions = []
+        for rating_filter in rating_filters:
+            if rating_filter == 'rated':
+                rating_conditions.append("b.rating > 0")
+            elif rating_filter == 'unrated':
+                rating_conditions.append("(b.rating IS NULL OR b.rating = 0)")
+            elif rating_filter.endswith('star'):
+                star_rating = int(rating_filter[0])
+                rating_conditions.append("b.rating >= %s")
+                params.append(star_rating)
+        if rating_conditions:
+            conditions.append(f"({' OR '.join(rating_conditions)})")
+    
+    # Add WHERE clause if there are conditions
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
+    # Add GROUP BY if we're filtering by tags
+    if tag_ids:
+        query += " GROUP BY b.id HAVING COUNT(DISTINCT bt.tag_id) = %s"
+        params.append(len(tag_ids))
+    
+    cur.execute(query, params)
+    books = cur.fetchall()
+    
+    # Get tags for each book
+    for book in books:
+        cur.execute("""
+            SELECT t.id, t.name, t.color 
+            FROM tags t 
+            JOIN book_tags bt ON t.id = bt.tag_id 
+            WHERE bt.book_id = %s
+        """, (book['id'],))
+        book['tags'] = cur.fetchall()
+
+        # Handle cover caching
+        cover_url = book['cover']
+        if cover_url:
+            filename = os.path.join(CACHE_DIR, str(book['id']))
+            if not os.path.exists(filename):
+                response = requests.get(cover_url)
+                if response.status_code == 200:
+                    with open(filename, 'wb') as f:
+                        f.write(response.content)
+            book['cover'] = filename if os.path.exists(filename) else None
+        if book['last_status_change']:
+            book['last_status_change'] = book['last_status_change'].strftime("%Y-%m-%d %H:%M:%S")
+
     cur.close()
     conn.close()
     return books
