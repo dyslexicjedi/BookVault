@@ -11,6 +11,7 @@ load_dotenv(override=True)
 
 from api_blueprint import api_bp
 from helpers import (
+    validate_isbn,
     insert_book,
     search_google_books_by_isbn,
     search_google_books_multiple,
@@ -139,15 +140,23 @@ def get_books():
 
 @app.route("/update_status", methods=["POST"])
 def update_status():
-    data = request.json
+    data = request.json or {}
     title = data.get("title")
     author = data.get("author")
     new_status = data.get("status")
     
-    if new_status in STATUS_OPTIONS:
-        update_book_status(title, author, new_status)
+    if not title or not author or not new_status:
+        return jsonify(success=False, message="Missing required fields"), 400
     
-    return jsonify(success=True)
+    if not isinstance(title, str) or not isinstance(author, str) or not isinstance(new_status, str):
+        return jsonify(success=False, message="Invalid field types"), 400
+    
+    if new_status not in STATUS_OPTIONS:
+        return jsonify(success=False, message=f"Status must be one of: {', '.join(STATUS_OPTIONS)}"), 400
+    
+    success = update_book_status(title, author, new_status)
+    
+    return jsonify(success=success)
 
 @app.route("/remove_book", methods=["POST"])
 def remove_book_route():
@@ -186,21 +195,39 @@ def serve_cover_cache(filename):
 
 @app.route("/update_status_rating", methods=["POST"])
 def update_status_rating():
-    data = request.json
+    data = request.json or {}
     title = data.get("title")
     author = data.get("author")
-    new_status = data.get("status")
+    new_status = data.get("status") if data else None
     rating = data.get("rating", 0)
     
-    if new_status in STATUS_OPTIONS:
-        update_book_status_and_rating(title, author, new_status, rating)
+    if not title or not author or new_status is None:
+        return jsonify(success=False, message="Missing required fields"), 400
     
-    return jsonify(success=True)
+    if not isinstance(title, str) or not isinstance(author, str):
+        return jsonify(success=False, message="Invalid field types"), 400
+    
+    if not isinstance(new_status, str) or new_status not in STATUS_OPTIONS:
+        return jsonify(success=False, message=f"Status must be one of: {', '.join(STATUS_OPTIONS)}"), 400
+    
+    try:
+        rating_value = int(rating)
+        if rating_value < 0 or rating_value > 5:
+            return jsonify(success=False, message="Rating must be between 0 and 5"), 400
+    except (ValueError, TypeError):
+        return jsonify(success=False, message="Invalid rating value"), 400
+    
+    success = update_book_status_and_rating(title, author, new_status, rating_value)
+    
+    return jsonify(success=success)
 
 @app.route("/isbn_lookup", methods=["POST"])
 def isbn_lookup():
     isbn = request.form.get("isbn", "").strip()
     if not isbn:
+        return redirect(url_for("index"))
+    
+    if not validate_isbn(isbn):
         return redirect(url_for("index"))
     
     results = search_google_books_by_isbn(isbn)

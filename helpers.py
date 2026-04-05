@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import mariadb
 from collections import Counter
@@ -6,6 +7,33 @@ from datetime import datetime
 
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
 CACHE_DIR = 'cover_cache'
+
+def validate_isbn(isbn: str) -> bool:
+    """Validate ISBN-10 or ISBN-13 format (basic check)."""
+    if not isbn:
+        return False
+    
+    # Remove hyphens and spaces for validation
+    clean_isbn = isbn.replace('-', '').replace(' ', '')
+    
+    # Must be 10 or 13 characters after cleaning
+    if len(clean_isbn) not in (10, 13):
+        return False
+    
+    # For ISBN-10: first 9 must be digits, last can be digit or X
+    if len(clean_isbn) == 10:
+        if not clean_isbn[:-1].isdigit():
+            return False
+        if clean_isbn[-1] != 'X' and not clean_isbn[-1].isdigit():
+            return False
+    
+    # For ISBN-13: must be all digits
+    elif len(clean_isbn) == 13:
+        if not clean_isbn.isdigit():
+            return False
+    
+    return True
+
 
 DB_CONFIG = {
     'user': os.getenv('BOOKVAULT_DBUSER'),
@@ -100,7 +128,7 @@ def ensure_book_metadata_columns():
 def get_google_books_metadata(title, author):
     query = f"intitle:{title} inauthor:{author}"
     url = f"https://www.googleapis.com/books/v1/volumes?q={requests.utils.quote(query)}&maxResults=1"
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     if response.status_code != 200:
         return {}
     data = response.json()
@@ -125,9 +153,11 @@ def get_google_books_metadata(title, author):
         "selfLink": items[0].get("selfLink"),
     }
 
-def get_google_books_metadata_by_isbn(isbn):
+def get_google_books_metadata_by_isbn(isbn: str):
+    if not validate_isbn(isbn):
+        return {}
     url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&maxResults=1"
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     if response.status_code != 200:
         return {}
     data = response.json()
@@ -152,7 +182,27 @@ def get_google_books_metadata_by_isbn(isbn):
         "selfLink": items[0].get("selfLink"),
     }
 
-def insert_book(book):
+def insert_book(book: dict) -> bool:
+    """Insert book with validation. Returns True on success, False otherwise."""
+    if not book or not isinstance(book, dict):
+        return False
+    
+    # Validate required fields
+    title = book.get("title")
+    author = book.get("author")
+    
+    if not title or not author:
+        return False
+    
+    if not isinstance(title, str) or not isinstance(author, str):
+        return False
+    
+    # Validate optional ISBN if present
+    isbn = book.get("isbn")
+    if isbn is not None and isbn != "":
+        if not validate_isbn(str(isbn)):
+            book["isbn"] = None
+    
     ensure_book_metadata_columns()
     # If API book, attempt to enrich with metadata
     if "isbn" not in book or book.get("isbn") is None:
@@ -191,11 +241,15 @@ def insert_book(book):
             book.get('publishedDate'), book.get('description'), book.get('selfLink')
         ))
         conn.commit()
+        return True
     except mariadb.Error as e:
         print(f"Error inserting book: {e}")
+        return False
     finally:
         cur.close()
         conn.close()
+    
+    return False
 
 def get_all_books():
     ensure_book_metadata_columns()
@@ -223,7 +277,7 @@ def get_all_books():
         if cover_url:
             filename = os.path.join(CACHE_DIR, str(book['id']))
             if not os.path.exists(filename):
-                response = requests.get(cover_url)
+                response = requests.get(cover_url, timeout=15)
                 if response.status_code == 200:
                     with open(filename, 'wb') as f:
                         f.write(response.content)
@@ -235,7 +289,17 @@ def get_all_books():
     conn.close()
     return books
 
-def update_book_status(title, author, status):
+def update_book_status(title: str, author: str, status: str) -> bool:
+    """Update book status with validation. Returns True on success, False otherwise."""
+    if not title or not author or not status:
+        return False
+    
+    if not isinstance(title, str) or not isinstance(author, str) or not isinstance(status, str):
+        return False
+    
+    if status not in STATUS_OPTIONS:
+        return False
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -244,27 +308,51 @@ def update_book_status(title, author, status):
             UPDATE books SET status = %s, last_status_change = %s WHERE title = %s AND author = %s
         """, (status, now, title, author))
         conn.commit()
+        return True
     except mariadb.Error as e:
         print(f"Error updating book status: {e}")
+        return False
     finally:
         cur.close()
         conn.close()
 
-def remove_book(title, author):
+def remove_book(title: str, author: str) -> bool:
+    """Remove book with validation. Returns True on success, False otherwise."""
+    if not title or not author:
+        return False
+    
+    if not isinstance(title, str) or not isinstance(author, str):
+        return False
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute("DELETE FROM books WHERE title = %s AND author = %s", (title, author))
         conn.commit()
+        return True
     except mariadb.Error as e:
         print(f"Error removing book: {e}")
+        return False
     finally:
         cur.close()
         conn.close()
+    
+    return False
 
-def search_google_books_multiple(query, max_results=20):
-    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults={max_results}"
-    response = requests.get(url)
+def search_google_books_multiple(query: str, max_results: int = 20) -> list:
+    """Search Google Books with validation. Returns list of book results."""
+    if not query or not isinstance(query, str):
+        return []
+    
+    try:
+        max_results_int = int(max_results)
+        if max_results_int < 1 or max_results_int > 50:
+            max_results_int = 20
+    except (ValueError, TypeError):
+        max_results_int = 20
+    
+    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults={max_results_int}"
+    response = requests.get(url, timeout=10)
     if response.status_code != 200:
         return []
     data = response.json()
@@ -314,7 +402,24 @@ def get_books_stats():
 
     return total_books, status_breakdown, author_breakdown, read_years, tag_breakdown
 
-def update_book_status_and_rating(title, author, status, rating):
+def update_book_status_and_rating(title: str, author: str, status: str, rating: int) -> bool:
+    """Update book status and rating with validation. Returns True on success, False otherwise."""
+    if not title or not author or not status:
+        return False
+    
+    if not isinstance(title, str) or not isinstance(author, str) or not isinstance(status, str):
+        return False
+    
+    if status not in STATUS_OPTIONS:
+        return False
+    
+    try:
+        rating_value = int(rating)
+        if rating_value < 0 or rating_value > 5:
+            return False
+    except (ValueError, TypeError):
+        return False
+
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -329,17 +434,23 @@ def update_book_status_and_rating(title, author, status, rating):
         now = datetime.now()
         cur.execute("""
             UPDATE books SET status = %s, rating = %s, last_status_change = %s WHERE title = %s AND author = %s
-        """, (status, rating, now, title, author))
+        """, (status, rating_value, now, title, author))
         conn.commit()
+        return True
     except mariadb.Error as e:
         print(f"Error updating book status and rating: {e}")
+        return False
     finally:
         cur.close()
         conn.close()
+    
+    return False
 
-def search_google_books_by_isbn(isbn):
+def search_google_books_by_isbn(isbn: str) -> list:
+    if not validate_isbn(isbn):
+        return []
     url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&maxResults=5"
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     if response.status_code != 200:
         return []
     data = response.json()
@@ -611,7 +722,7 @@ def filter_books_by_tags(tag_ids):
         if cover_url:
             filename = os.path.join(CACHE_DIR, str(book['id']))
             if not os.path.exists(filename):
-                response = requests.get(cover_url)
+                response = requests.get(cover_url, timeout=15)
                 if response.status_code == 200:
                     with open(filename, 'wb') as f:
                         f.write(response.content)
@@ -729,7 +840,7 @@ def filter_books(status_filters=None, format_filters=None, rating_filters=None, 
         if cover_url:
             filename = os.path.join(CACHE_DIR, str(book['id']))
             if not os.path.exists(filename):
-                response = requests.get(cover_url)
+                response = requests.get(cover_url, timeout=15)
                 if response.status_code == 200:
                     with open(filename, 'wb') as f:
                         f.write(response.content)

@@ -1,6 +1,6 @@
 import os
 from flask import Blueprint, jsonify, request, current_app, send_from_directory
-from helpers import search_google_books_by_isbn, insert_book, get_all_books, filter_books
+from helpers import search_google_books_by_isbn, insert_book, get_all_books, filter_books, validate_isbn
 from werkzeug.utils import secure_filename
 from helpers import update_book_ebook_path,get_ebook_path_by_book_id,create_upload_folder,update_physical_copy
 
@@ -46,7 +46,9 @@ def api_isbn_lookup():
     print("API ISBN Called")
     isbn = request.form.get("isbn", "").strip()
     if not isbn:
-        return "ISBN is required", 500
+        return jsonify(success=False, message="ISBN is required"), 400
+    if not validate_isbn(isbn):
+        return jsonify(success=False, message="Invalid ISBN format"), 400
     results = search_google_books_by_isbn(isbn)
     if len(results) == 1:
         book = results[0]
