@@ -28,7 +28,7 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r test_requirements.txt
-          pip install pytest-cov mypy types-requests flask-stubs mariadb-stubs
+          pip install pytest-cov mypy types-requests mariadb-stubs
       
       - name: Run tests
         env:
@@ -59,7 +59,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install pylint mypy types-requests flask-stubs mariadb-stubs
+          pip install pylint mypy types-requests mariadb-stubs
       
       - name: Type check with mypy
         run: |
