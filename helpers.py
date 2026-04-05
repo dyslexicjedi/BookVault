@@ -1,11 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory, current_app
+import os
 import requests
 import mariadb
-import os
 from collections import Counter
-from dotenv import load_dotenv
 from datetime import datetime
-import json
 
 STATUS_OPTIONS = ["TBR", "Reading", "Read", "DNF"]
 CACHE_DIR = 'cover_cache'
