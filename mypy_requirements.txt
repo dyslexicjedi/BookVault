@@ -1,0 +1,4 @@
+types-requests
+types-python-dotenv
+flask-stubs
+mariadb-stubs
