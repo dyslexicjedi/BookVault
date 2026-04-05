@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r test_requirements.txt
+      
+      - name: Run tests
+        env:
+          BOOKVAULT_DBUSER: testuser
+          BOOKVAULT_DBPASS: testpass
+          BOOKVAULT_DBHOST: localhost
+          BOOKVAULT_DBPORT: 3306
+          BOOKVAULT_DBNAME: test_db
+        run: |
+          pytest tests/ -v --cov=helpers --cov-report=xml --tb=short
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flake8 pylint mypy
+          
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --show-source --statistics
+      
+      - name: Type check with mypy
+        run: |
+          mypy helpers.py app.py api_blueprint.py

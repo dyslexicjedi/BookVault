@@ -14,7 +14,7 @@ DB_CONFIG = {
     'user': os.getenv('BOOKVAULT_DBUSER'),
     'password': os.getenv('BOOKVAULT_DBPASS'),
     'host': os.getenv('BOOKVAULT_DBHOST'),
-    'port': int(os.getenv('BOOKVAULT_DBPORT')),
+    'port': int(os.getenv('BOOKVAULT_DBPORT', '3306')),
     'database': os.getenv('BOOKVAULT_DBNAME')
 }
 
@@ -565,11 +565,23 @@ def filter_books_by_tags(tag_ids):
     if not tag_ids:
         return get_all_books()
     
+    # Validate all tag_ids are positive integers
+    validated_tag_ids = []
+    for tid in tag_ids:
+        try:
+            tid_int = int(tid)
+            if tid_int > 0:
+                validated_tag_ids.append(tid_int)
+        except (ValueError, TypeError):
+            continue
+    
+    if not validated_tag_ids:
+        return get_all_books()
+    
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
     
-    # Create placeholders for the IN clause
-    placeholders = ','.join(['%s'] * len(tag_ids))
+    placeholders = ','.join(['%s'] * len(validated_tag_ids))
     
     cur.execute(f"""
         SELECT b.id, b.title, b.author, b.cover, b.status, COALESCE(b.rating, 0) as rating, 
@@ -583,7 +595,7 @@ def filter_books_by_tags(tag_ids):
             GROUP BY bt.book_id 
             HAVING COUNT(DISTINCT bt.tag_id) = %s
         )
-    """, tag_ids + [len(tag_ids)])
+    """, validated_tag_ids + [len(validated_tag_ids)])
     
     books = cur.fetchall()
     
@@ -636,16 +648,32 @@ def filter_books(status_filters=None, format_filters=None, rating_filters=None, 
     
     # Add tag filter if specified
     if tag_ids:
-        query += " JOIN book_tags bt ON b.id = bt.book_id"
-        placeholders = ','.join(['%s'] * len(tag_ids))
-        conditions.append(f"bt.tag_id IN ({placeholders})")
-        params.extend(tag_ids)
+        # Validate and sanitize tag_ids
+        validated_tag_ids = []
+        for tid in tag_ids:
+            try:
+                tid_int = int(tid)
+                if tid_int > 0:
+                    validated_tag_ids.append(tid_int)
+            except (ValueError, TypeError):
+                continue
+        
+        if validated_tag_ids:
+            query += " JOIN book_tags bt ON b.id = bt.book_id"
+            placeholders = ','.join(['%s'] * len(validated_tag_ids))
+            conditions.append(f"bt.tag_id IN ({placeholders})")
+            params.extend(validated_tag_ids)
     
     # Add status filter
     if status_filters:
-        status_placeholders = ','.join(['%s'] * len(status_filters))
-        conditions.append(f"b.status IN ({status_placeholders})")
-        params.extend(status_filters)
+        # Validate status values against allowed list
+        valid_statuses = {'TBR', 'Reading', 'Read', 'DNF'}
+        validated_statuses = [s for s in status_filters if s in valid_statuses]
+        
+        if validated_statuses:
+            status_placeholders = ','.join(['%s'] * len(validated_statuses))
+            conditions.append(f"b.status IN ({status_placeholders})")
+            params.extend(validated_statuses)
     
     # Add format filters
     if format_filters:
@@ -666,9 +694,14 @@ def filter_books(status_filters=None, format_filters=None, rating_filters=None, 
             elif rating_filter == 'unrated':
                 rating_conditions.append("(b.rating IS NULL OR b.rating = 0)")
             elif rating_filter.endswith('star'):
-                star_rating = int(rating_filter[0])
-                rating_conditions.append("b.rating >= %s")
-                params.append(star_rating)
+                # Validate star rating value
+                try:
+                    star_rating = int(rating_filter[0])
+                    if 1 <= star_rating <= 5:
+                        rating_conditions.append("b.rating >= %s")
+                        params.append(star_rating)
+                except (ValueError, IndexError):
+                    continue
         if rating_conditions:
             conditions.append(f"({' OR '.join(rating_conditions)})")
     

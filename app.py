@@ -41,7 +41,7 @@ DB_CONFIG = {
     'user': os.getenv('BOOKVAULT_DBUSER'),
     'password': os.getenv('BOOKVAULT_DBPASS'),
     'host': os.getenv('BOOKVAULT_DBHOST'),
-    'port': int(os.getenv('BOOKVAULT_DBPORT')),
+    'port': int(os.getenv('BOOKVAULT_DBPORT', '3306')),
     'database': os.getenv('BOOKVAULT_DBNAME')
 }
 
