@@ -1,8 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory
-import requests
-import mariadb
 import os
-from collections import Counter
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -11,10 +8,7 @@ load_dotenv(override=True)
 
 from api_blueprint import api_bp
 from helpers import (
-    validate_isbn,
     insert_book,
-    search_google_books_by_isbn,
-    search_google_books_multiple,
     get_all_books,
     update_book_status,
     remove_book,
@@ -27,7 +21,6 @@ from helpers import (
     create_tag,
     add_tag_to_book,
     remove_tag_from_book,
-    filter_books_by_tags,
     filter_books,
     delete_tag,
     update_tag
@@ -53,46 +46,35 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-@app.route("/", methods=["GET", "POST"])
+def _parse_year(date_str):
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S").year
+    except (ValueError, TypeError):
+        return None
+
+
+@app.route("/")
 def index():
-    if request.method == "POST":
-        # Handle book selection
-        selected = request.form.get("selected_book")
-        if selected:
-            import json
-            book = json.loads(selected)
-            book['status'] = "TBR"
-            insert_book(book)
-            return redirect(url_for("index"))
-
-        # Handle search
-        query = request.form.get("search")
-        if query:
-            results = search_google_books_multiple(query)
-            if len(results) > 1:
-                books = get_all_books()
-                tags = get_all_tags()
-                return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results, tags=tags)
-            elif len(results) == 1:
-                book = results[0]
-                book['status'] = "TBR"
-                insert_book(book)
-                return redirect(url_for("index"))
-            else:
-                return redirect(url_for("index"))
-
     # Handle filtering
     selected_tags = request.args.getlist('tags')
     selected_status = request.args.getlist('status_filter')
     selected_formats = request.args.getlist('format_filter')
     selected_ratings = request.args.getlist('rating_filter')
-    
-    # Check if any filters are applied
+
+    all_books = get_all_books()
+
+    # Header stats always reflect the full library
+    current_year = datetime.now().year
+    total_read = sum(1 for b in all_books if b.get('status') == 'Read')
+    read_this_year = sum(
+        1 for b in all_books
+        if b.get('status') == 'Read' and _parse_year(b.get('last_status_change')) == current_year
+    )
+    current_reading = next((b for b in all_books if b.get('status') == 'Reading'), None)
+
+    # Apply filters for the displayed grid
     if selected_tags or selected_status or selected_formats or selected_ratings:
-        # Convert string IDs to integers for tags
-        tag_ids = [int(tag_id) for tag_id in selected_tags if tag_id.isdigit()] if selected_tags else None
-        
-        # Filter books using the new filter function
+        tag_ids = [int(t) for t in selected_tags if t.isdigit()] if selected_tags else None
         books = filter_books(
             status_filters=selected_status if selected_status else None,
             format_filters=selected_formats if selected_formats else None,
@@ -100,17 +82,21 @@ def index():
             tag_ids=tag_ids
         )
     else:
-        books = get_all_books()
-    
+        books = all_books
+
     tags = get_all_tags()
-    return render_template("index.html", 
-                         books=books, 
-                         status_options=STATUS_OPTIONS, 
-                         tags=tags, 
-                         selected_tags=selected_tags,
-                         selected_status=selected_status,
-                         selected_formats=selected_formats,
-                         selected_ratings=selected_ratings)
+    return render_template("index.html",
+                           books=books,
+                           status_options=STATUS_OPTIONS,
+                           tags=tags,
+                           selected_tags=selected_tags,
+                           selected_status=selected_status,
+                           selected_formats=selected_formats,
+                           selected_ratings=selected_ratings,
+                           total_books=len(all_books),
+                           total_read=total_read,
+                           read_this_year=read_this_year,
+                           current_reading=current_reading)
 
 @app.route("/api/get_books")
 def get_books():
@@ -235,10 +221,30 @@ def isbn_lookup():
         book = results[0]
         book['status'] = "TBR"
         insert_book(book)
-        return redirect(url_for("index"))
+        return redirect(url_for("index", added=book['title']))
     elif len(results) > 1:
-        books = get_all_books()
-        return render_template("index.html", books=books, status_options=STATUS_OPTIONS, search_results=results)
+        all_books = get_all_books()
+        tags = get_all_tags()
+        current_year = datetime.now().year
+        total_read = sum(1 for b in all_books if b.get('status') == 'Read')
+        read_this_year = sum(
+            1 for b in all_books
+            if b.get('status') == 'Read' and _parse_year(b.get('last_status_change')) == current_year
+        )
+        current_reading = next((b for b in all_books if b.get('status') == 'Reading'), None)
+        return render_template("index.html",
+                               books=all_books,
+                               status_options=STATUS_OPTIONS,
+                               search_results=results,
+                               tags=tags,
+                               selected_tags=[],
+                               selected_status=[],
+                               selected_formats=[],
+                               selected_ratings=[],
+                               total_books=len(all_books),
+                               total_read=total_read,
+                               read_this_year=read_this_year,
+                               current_reading=current_reading)
     else:
         return redirect(url_for("index"))
     

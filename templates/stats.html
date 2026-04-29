@@ -1,723 +1,294 @@
 {% extends "base.html" %}
 
-{% block title %}Library Statistics - Book Vault{% endblock %}
+{% block title %}Statistics — BookVault{% endblock %}
 
 {% block head %}
 <script src="https://d3js.org/d3.v7.min.js"></script>
-<style>
-        .stats-hero {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            color: white;
-            text-align: center;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .stat-card {
-            background: var(--bs-card-bg, #ffffff);
-            border-radius: 20px;
-            padding: 2rem;
-            text-align: center;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
-        }
-        
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.5rem;
-        }
-        
-        .stat-label {
-            color: var(--bs-secondary);
-            font-weight: 500;
-            font-size: 0.95rem;
-        }
-        
-        .chart-section {
-            background: var(--bs-card-bg, #ffffff);
-            border-radius: 20px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-            padding: 2rem;
-            margin-bottom: 2rem;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .chart-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            transform: scaleX(0);
-            transition: transform 0.3s;
-        }
-        
-        .chart-section:hover::before {
-            transform: scaleX(1);
-        }
-        
-        .chart-section:hover {
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
-        }
-        
-        .chart-section h2 {
-            font-family: 'Playfair Display', serif;
-            font-weight: 600;
-            color: var(--bs-body-color);
-            margin-bottom: 1.5rem;
-            font-size: 1.5rem;
-        }
-        
-        .chart-section h2 i {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .chart-container {
-            width: 100%;
-            margin: 0 auto;
-            overflow-x: auto;
-        }
-        
-        .d3-tooltip {
-            position: absolute;
-            pointer-events: none;
-            background: rgba(0,0,0,0.95);
-            color: #fff;
-            padding: 0.75rem 1.25rem;
-            border-radius: 12px;
-            font-size: 0.95rem;
-            z-index: 1000;
-            display: none;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            font-weight: 500;
-        }
-        
-        .charts-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-        
-        @media (max-width: 768px) {
-            .charts-row {
-                grid-template-columns: 1fr;
-            }
-            .stat-number {
-                font-size: 2rem;
-            }
-        }
-    </style>
 {% endblock %}
 
 {% block content %}
-<div class="container my-5">
-    <!-- Hero Section -->
-    <div class="stats-hero fade-in-up">
-        <h1 class="display-4 mb-3 fw-bold">📊 Library Statistics</h1>
-        <p class="lead mb-0">Insights into your reading journey</p>
-    </div>
-    
-    <!-- Summary Stats Grid -->
-    <div class="stats-grid fade-in-up" style="animation-delay: 0.1s;">
-        <div class="stat-card">
-            <i class="bi bi-book-fill display-4 mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
-            <div class="stat-number">{{ total_books }}</div>
-            <div class="stat-label">Total Books</div>
-        </div>
-        
-        {% set read_count = status_breakdown.get('Read', 0) %}
-        <div class="stat-card">
-            <i class="bi bi-check-circle-fill display-4 mb-3" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
-            <div class="stat-number">{{ read_count }}</div>
-            <div class="stat-label">Books Read</div>
-        </div>
-        
-        {% set reading_count = status_breakdown.get('Reading', 0) %}
-        <div class="stat-card">
-            <i class="bi bi-book-half display-4 mb-3" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
-            <div class="stat-number">{{ reading_count }}</div>
-            <div class="stat-label">Currently Reading</div>
-        </div>
-        
-        <div class="stat-card">
-            <i class="bi bi-person-fill display-4 mb-3" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
-            <div class="stat-number">{{ author_breakdown|length }}</div>
-            <div class="stat-label">Unique Authors</div>
-        </div>
-    </div>
-    
-    <!-- Charts Row -->
-    <div class="charts-row">
-        <section class="chart-section fade-in-up" style="animation-delay: 0.2s;">
-            <h2><i class="bi bi-pie-chart-fill me-2"></i>Status Breakdown</h2>
-            <div id="status-pie" class="chart-container"></div>
-        </section>
-        
-        <section class="chart-section fade-in-up" style="animation-delay: 0.3s;">
-            <h2><i class="bi bi-bar-chart-fill me-2"></i>Books Read by Year</h2>
-            <div id="year-bar" class="chart-container"></div>
-        </section>
-    </div>
-    
-    <!-- Full Width Charts -->
-    <section class="chart-section fade-in-up" style="animation-delay: 0.4s;">
-        <h2><i class="bi bi-graph-up me-2"></i>Books by Author</h2>
-        <div id="author-line" class="chart-container"></div>
-    </section>
-    
-    {% if tag_breakdown %}
-    <section class="chart-section fade-in-up" style="animation-delay: 0.5s;">
-        <h2><i class="bi bi-tags-fill me-2"></i>Popular Tags</h2>
-        <div id="tag-bar" class="chart-container"></div>
-    </section>
-    {% endif %}
+<div class="page-header">
+    <h1 class="page-title">Statistics</h1>
 </div>
+
+<!-- Summary stats -->
+<div class="stats-summary-grid">
+    <div class="stat-card">
+        <i class="bi bi-book-fill stat-card-icon"></i>
+        <div class="stat-card-number">{{ total_books }}</div>
+        <div class="stat-card-label">Total Books</div>
+    </div>
+
+    {% set read_count = status_breakdown.get('Read', 0) %}
+    <div class="stat-card">
+        <i class="bi bi-check-circle stat-card-icon" style="color: #22c55e;"></i>
+        <div class="stat-card-number">{{ read_count }}</div>
+        <div class="stat-card-label">Books Read</div>
+    </div>
+
+    {% set reading_count = status_breakdown.get('Reading', 0) %}
+    <div class="stat-card">
+        <i class="bi bi-book-half stat-card-icon" style="color: #a89dfc;"></i>
+        <div class="stat-card-number">{{ reading_count }}</div>
+        <div class="stat-card-label">Currently Reading</div>
+    </div>
+
+    <div class="stat-card">
+        <i class="bi bi-person stat-card-icon" style="color: #f59e0b;"></i>
+        <div class="stat-card-number">{{ author_breakdown|length }}</div>
+        <div class="stat-card-label">Unique Authors</div>
+    </div>
+</div>
+
+<!-- Charts row -->
+<div class="charts-row">
+    <div class="chart-panel">
+        <div class="chart-panel-title">
+            <i class="bi bi-pie-chart-fill"></i> Status Breakdown
+        </div>
+        <div id="status-pie" class="chart-container"></div>
+    </div>
+
+    <div class="chart-panel">
+        <div class="chart-panel-title">
+            <i class="bi bi-bar-chart-fill"></i> Books Read by Year
+        </div>
+        <div id="year-bar" class="chart-container"></div>
+    </div>
+</div>
+
+<!-- Authors chart -->
+<div class="chart-panel">
+    <div class="chart-panel-title">
+        <i class="bi bi-graph-up"></i> Books by Author
+    </div>
+    <div id="author-line" class="chart-container"></div>
+</div>
+
+{% if tag_breakdown %}
+<div class="chart-panel">
+    <div class="chart-panel-title">
+        <i class="bi bi-tags-fill"></i> Popular Tags
+    </div>
+    <div id="tag-bar" class="chart-container"></div>
+</div>
+{% endif %}
 
 <div id="d3-tooltip" class="d3-tooltip"></div>
 {% endblock %}
 
 {% block scripts %}
-    <script>
-        const statusData = [
-            {% for status, count in status_breakdown.items() %}
-                {status: "{{ status }}", count: {{ count }}},
-            {% endfor %}
-        ];
-        const yearData = [
-            {% for year, count in read_years|dictsort %}
-                {year: "{{ year }}", count: {{ count }}},
-            {% endfor %}
-        ];
-        const authorData = [
-            {% for author, count in author_breakdown.items() %}
-                {author: `{{ author | e }}`, count: {{ count }}},
-            {% endfor %}
-        ];
-        const tagData = [
-            {% if tag_breakdown %}
-            {% for tag, count in tag_breakdown.items() %}
-                {tag: "{{ tag | e }}", count: {{ count }}},
-            {% endfor %}
-            {% endif %}
-        ];
-    </script>
-    <script>
-    // PIE CHART: Breakdown by Status
+<script>
+    const statusData = [
+        {% for status, count in status_breakdown.items() %}
+            {status: "{{ status }}", count: {{ count }}},
+        {% endfor %}
+    ];
+    const yearData = [
+        {% for year, count in read_years|dictsort %}
+            {year: "{{ year }}", count: {{ count }}},
+        {% endfor %}
+    ];
+    const authorData = [
+        {% for author, count in author_breakdown.items() %}
+            {author: `{{ author | e }}`, count: {{ count }}},
+        {% endfor %}
+    ];
+    const tagData = [
+        {% if tag_breakdown %}
+        {% for tag, count in tag_breakdown.items() %}
+            {tag: "{{ tag | e }}", count: {{ count }}},
+        {% endfor %}
+        {% endif %}
+    ];
+
+    // Resolve CSS vars for D3
+    function cssVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    // PIE CHART
     (function() {
         if (!statusData.length) return;
-        const width = 450, height = 350, radius = Math.min(width, height) / 2 - 20;
+        const width = 420, height = 340, radius = Math.min(width, height) / 2 - 20;
         const color = d3.scaleOrdinal()
             .domain(["TBR", "Reading", "Read", "DNF"])
-            .range(["#667eea", "#4facfe", "#38ef7d", "#f5576c"]);
-        const svg = d3.select('#status-pie')
-            .append('svg')
-            .attr('width', width)
-            .attr('height', height)
-          .append('g')
-            .attr('transform', `translate(${width/2},${height/2})`);
+            .range(["#f59e0b", "#a89dfc", "#22c55e", "#f87171"]);
+        const svg = d3.select('#status-pie').append('svg')
+            .attr('width', width).attr('height', height)
+            .append('g')
+            .attr('transform', `translate(${width / 2},${height / 2 - 10})`);
         const pie = d3.pie().value(d => d.count);
-        const arc = d3.arc().innerRadius(0).outerRadius(radius);
+        const arc = d3.arc().innerRadius(60).outerRadius(radius);
         const tooltip = d3.select("#d3-tooltip");
 
-        const arcPath = svg.selectAll('path')
+        const paths = svg.selectAll('path')
             .data(pie(statusData))
             .enter().append('path')
             .attr('fill', d => color(d.data.status))
-            .attr('stroke', '#fff')
-            .attr('stroke-width', '3px')
-            .style('filter', 'drop-shadow(0px 3px 6px rgba(0,0,0,0.2))')
-            .on("mousemove", function(e, d){
-                d3.select(this)
-                    .transition()
-                    .duration(200)
-                    .attr('transform', function(d) {
-                        const [x, y] = arc.centroid(d);
-                        return `translate(${x*0.1},${y*0.1})`;
-                    });
+            .attr('stroke', 'var(--bv-surface-2)')
+            .attr('stroke-width', 2)
+            .on("mousemove", function(e, d) {
                 tooltip.style("display", "block")
-                    .html(`<b>${d.data.status}</b>: ${d.data.count} book${d.data.count==1?"":"s"}`)
-                    .style("left", (e.pageX + 16) + "px")
-                    .style("top", (e.pageY - 24) + "px");
+                    .html(`<b>${d.data.status}</b>: ${d.data.count} book${d.data.count == 1 ? "" : "s"}`)
+                    .style("left", (e.pageX + 14) + "px")
+                    .style("top", (e.pageY - 20) + "px");
             })
-            .on("mouseout", function() {
-                d3.select(this)
-                    .transition()
-                    .duration(200)
-                    .attr('transform', 'translate(0,0)');
-                tooltip.style("display", "none");
-            });
-        
-        // Animate pie chart
-        arcPath.transition()
-            .duration(1000)
+            .on("mouseout", () => tooltip.style("display", "none"));
+
+        paths.transition().duration(900)
             .attrTween('d', function(d) {
-                const interpolate = d3.interpolate({startAngle: 0, endAngle: 0}, d);
-                return function(t) {
-                    return arc(interpolate(t));
-                };
+                const i = d3.interpolate({startAngle: 0, endAngle: 0}, d);
+                return t => arc(i(t));
             });
 
-        // Add legend
+        // Legend
         const legend = svg.append("g")
-            .attr("transform", `translate(${-width / 2 + 15},${radius + 30})`);
+            .attr("transform", `translate(${-width / 2 + 12},${radius + 16})`);
         legend.selectAll("rect")
-            .data(statusData)
-            .enter().append("rect")
-            .attr("x", 0).attr("y", (d,i)=>i*28)
-            .attr("width", 18).attr("height", 18)
-            .attr("rx", 4)
-            .attr("fill", (d,i) => color(d.status))
-            .style("opacity", 0)
-            .transition()
-            .delay((d, i) => 1000 + i * 100)
-            .duration(500)
-            .style("opacity", 1);
+            .data(statusData).enter().append("rect")
+            .attr("x", 0).attr("y", (d, i) => i * 24)
+            .attr("width", 14).attr("height", 14).attr("rx", 3)
+            .attr("fill", d => color(d.status));
         legend.selectAll("text")
-            .data(statusData)
-            .enter().append("text")
-            .attr("x", 26).attr("y",(d,i)=>i*28 + 14)
-            .style("font-size","14px")
-            .style("font-weight", "500")
-            .text(d => `${d.status} (${d.count})`)
-            .style("opacity", 0)
-            .transition()
-            .delay((d, i) => 1000 + i * 100)
-            .duration(500)
-            .style("opacity", 1);
+            .data(statusData).enter().append("text")
+            .attr("x", 22).attr("y", (d, i) => i * 24 + 11)
+            .style("font-size", "12px").style("font-family", "Inter, sans-serif")
+            .style("fill", "var(--bv-text-2)")
+            .text(d => `${d.status} (${d.count})`);
     })();
 
-    // LINE CHART: Breakdown by Author
-    (function() {
-        if (!authorData.length) return;
-        const margin = {top: 40, right: 30, bottom: 100, left: 50};
-        const numAuthors = authorData.length;
-
-        // Compute width from container
-        const container = document.getElementById("author-line");
-        const width = Math.max((container ? container.getBoundingClientRect().width : 1400) - margin.left - margin.right, 300);
-        const height = 400;
-        const svg = d3.select("#author-line")
-            .append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-          .append("g")
-            .attr("transform",`translate(${margin.left},${margin.top})`);
-        const x = d3.scalePoint()
-            .domain(authorData.map(d=>d.author))
-            .range([0,width])
-            .padding(0.5);
-        const y = d3.scaleLinear()
-            .domain([0, d3.max(authorData, d => d.count) || 1])
-            .nice()
-            .range([height,0]);
-
-        // Add gradient for line
-        const lineGradient = svg.append("defs")
-          .append("linearGradient")
-            .attr("id", "line-gradient")
-            .attr("gradientUnits", "userSpaceOnUse")
-            .attr("x1", 0)
-            .attr("y1", y(0))
-            .attr("x2", 0)
-            .attr("y2", y(d3.max(authorData, d => d.count)));
-        lineGradient.append("stop")
-            .attr("offset", "0%")
-            .attr("stop-color", "#f5576c");
-        lineGradient.append("stop")
-            .attr("offset", "100%")
-            .attr("stop-color", "#f093fb");
-
-        // X axis:
-        svg.append("g")
-            .attr("transform",`translate(0,${height})`)
-            .call(
-                d3.axisBottom(x)
-                .tickFormat(d => d.length > 20 ? d.slice(0,18)+"…" : d)
-            )
-            .selectAll("text")
-            .attr("text-anchor", "end")
-            .attr("dx", "-0.8em")
-            .attr("dy", ".15em")
-            .attr("transform", "rotate(-45)")
-            .style("font-size", "11px")
-            .style("font-weight", "500");
-        // Y axis:
-        svg.append("g")
-            .call(d3.axisLeft(y).ticks(8))
-            .selectAll("text")
-            .style("font-size", "12px")
-            .style("font-weight", "500");
-        
-        // Add grid lines
-        svg.append("g")
-            .attr("class", "grid")
-            .style("stroke-dasharray", "3,3")
-            .style("opacity", 0.2)
-            .call(d3.axisLeft(y)
-                .ticks(8)
-                .tickSize(-width)
-                .tickFormat("")
-            );
-        // Tooltip
-        const tooltip = d3.select("#d3-tooltip");
-
-        // Area under the line
-        const area = d3.area()
-            .x(d => x(d.author))
-            .y0(height)
-            .y1(d => y(d.count));
-            
-        svg.append("path")
-            .datum(authorData)
-            .attr("fill", "url(#line-gradient)")
-            .attr("opacity", 0.2)
-            .attr("d", area);
-        
-        // Line
-        const line = svg.append("path")
-            .datum(authorData)
-            .attr("fill","none")
-            .attr("stroke","url(#line-gradient)")
-            .attr("stroke-width", 3)
-            .attr("d", d3.line()
-                .x(d=>x(d.author))
-                .y(d=>y(d.count))
-            );
-            
-        // Animate line
-        const totalLength = line.node().getTotalLength();
-        line.attr("stroke-dasharray", totalLength + " " + totalLength)
-            .attr("stroke-dashoffset", totalLength)
-            .transition()
-            .duration(2000)
-            .attr("stroke-dashoffset", 0);
-        
-        // Dots
-        svg.selectAll("dot")
-            .data(authorData)
-            .enter().append("circle")
-            .attr("cx", d=>x(d.author))
-            .attr("cy", d=>y(d.count))
-            .attr("r", 0)
-            .attr("fill", "#f5576c")
-            .attr("stroke", "#fff")
-            .attr("stroke-width", 2)
-            .style('filter', 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))')
-            .on("mousemove", function(e, d){
-                d3.select(this)
-                    .transition()
-                    .duration(200)
-                    .attr("r", 10);
-                tooltip.style("display", "block")
-                    .html(`<b>${d.author.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</b>: ${d.count} book${d.count==1?"":"s"}`)
-                    .style("left", (e.pageX + 16) + "px")
-                    .style("top", (e.pageY - 24) + "px");
-            })
-            .on("mouseout", function() {
-                d3.select(this)
-                    .transition()
-                    .duration(200)
-                    .attr("r", 6);
-                tooltip.style("display", "none");
-            })
-            .transition()
-            .delay((d, i) => 2000 + i * 50)
-            .duration(500)
-            .attr("r", 6);
-
-        // Axis labels
-        svg.append("text")
-            .attr("x", width/2)
-            .attr("y", height + margin.bottom - 10)
-            .attr("text-anchor", "middle")
-            .style("font-size", "12px")
-            .style("font-weight", "600")
-            .style("fill", "#7f8c8d")
-            .text("Authors");
-            
-        svg.append("text")
-            .attr("transform", "rotate(-90)")
-            .attr("y", 0 - margin.left + 10)
-            .attr("x", 0 - (height / 2))
-            .attr("text-anchor", "middle")
-            .style("font-size", "12px")
-            .style("font-weight", "600")
-            .style("fill", "#7f8c8d")
-            .text("Number of Books");
-    })();
-
-    // BAR CHART: Books Read by Year
+    // BAR CHART: by Year
     (function() {
         if (!yearData.length) return;
-        const margin = {top: 40, right: 30, bottom: 50, left: 50};
-        const width = 450 - margin.left - margin.right;
-        const height = 350 - margin.top - margin.bottom;
-        const svg = d3.select("#year-bar")
-            .append("svg")
+        const margin = {top: 20, right: 20, bottom: 40, left: 40};
+        const width = 380 - margin.left - margin.right;
+        const height = 280 - margin.top - margin.bottom;
+        const svg = d3.select("#year-bar").append("svg")
             .attr("width", width + margin.left + margin.right)
             .attr("height", height + margin.top + margin.bottom)
-          .append("g")
-            .attr("transform",`translate(${margin.left},${margin.top})`);
+            .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-        const years = yearData.map(d=>d.year);
-        const counts = yearData.map(d=>d.count);
+        const x = d3.scaleBand().domain(yearData.map(d => d.year)).range([0, width]).padding(0.25);
+        const y = d3.scaleLinear().domain([0, d3.max(yearData, d => d.count) || 1]).nice().range([height, 0]);
 
-        const x = d3.scaleBand()
-            .domain(years)
-            .range([0,width])
-            .padding(0.22);
-        const y = d3.scaleLinear()
-            .domain([0, d3.max(counts)||1])
-            .nice()
-            .range([height,0]);
-
-        // Add gradient for bars
-        const barGradient = svg.append("defs")
-          .append("linearGradient")
-            .attr("id", "bar-gradient")
-            .attr("x1", "0%")
-            .attr("y1", "100%")
-            .attr("x2", "0%")
-            .attr("y2", "0%");
-        barGradient.append("stop")
-            .attr("offset", "0%")
-            .attr("stop-color", "#4facfe");
-        barGradient.append("stop")
-            .attr("offset", "100%")
-            .attr("stop-color", "#00f2fe");
-
-        svg.append("g")
-            .attr("transform",`translate(0,${height})`)
+        svg.append("g").attr("transform", `translate(0,${height})`)
             .call(d3.axisBottom(x))
-            .selectAll("text")
-            .style("font-size", "12px")
-            .style("font-weight", "500");
-        svg.append("g")
-            .call(d3.axisLeft(y).ticks(6))
-            .selectAll("text")
-            .style("font-size", "12px")
-            .style("font-weight", "500");
-        
-        // Add grid lines
-        svg.append("g")
-            .attr("class", "grid")
-            .style("stroke-dasharray", "3,3")
-            .style("opacity", 0.2)
-            .call(d3.axisLeft(y)
-                .ticks(6)
-                .tickSize(-width)
-                .tickFormat("")
-            );
+            .selectAll("text").style("font-size", "11px").style("fill", "var(--bv-text-2)");
+        svg.append("g").call(d3.axisLeft(y).ticks(5))
+            .selectAll("text").style("font-size", "11px").style("fill", "var(--bv-text-2)");
+        svg.selectAll(".domain, .tick line").style("stroke", "var(--bv-border-strong)");
 
         const tooltip = d3.select("#d3-tooltip");
 
-        svg.selectAll("rect")
-            .data(yearData)
-            .enter().append("rect")
-            .attr("x", d=>x(d.year))
-            .attr("y", height)
-            .attr("width", x.bandwidth())
-            .attr("height", 0)
-            .attr("fill", "url(#bar-gradient)")
-            .attr("rx", 6)
-            .style('filter', 'drop-shadow(0px 2px 4px rgba(0,0,0,0.2))')
-            .on("mousemove", function(e,d){
-                d3.select(this).style("opacity", 0.8);
+        svg.selectAll("rect").data(yearData).enter().append("rect")
+            .attr("x", d => x(d.year)).attr("y", height)
+            .attr("width", x.bandwidth()).attr("height", 0)
+            .attr("fill", "#7c6dfa").attr("rx", 4).attr("opacity", 0.85)
+            .on("mousemove", (e, d) => {
                 tooltip.style("display", "block")
-                    .html(`<b>${d.year}</b>: ${d.count} book${d.count==1?"":"s"}`)
-                    .style("left", (e.pageX+16)+"px")
-                    .style("top",(e.pageY-24)+"px");
-            })
-            .on("mouseout", function() {
-                d3.select(this).style("opacity", 1);
-                tooltip.style("display","none");
-            })
-            .transition()
-            .duration(1000)
-            .delay((d, i) => i * 100)
-            .attr("y", d=>y(d.count))
-            .attr("height", d=>height-y(d.count));
-
-        // Axis labels
-        svg.append("text")
-            .attr("x", width/2)
-            .attr("y", height + margin.bottom - 10)
-            .attr("text-anchor", "middle")
-            .style("font-size", "12px")
-            .style("font-weight", "600")
-            .style("fill", "#7f8c8d")
-            .text("Year");
-            
-        svg.append("text")
-            .attr("transform", "rotate(-90)")
-            .attr("y", 0 - margin.left + 10)
-            .attr("x", 0 - (height / 2))
-            .attr("text-anchor", "middle")
-            .style("font-size", "12px")
-            .style("font-weight", "600")
-            .style("fill", "#7f8c8d")
-            .text("Books Read");
-    })();
-
-    
-    // TAG BAR CHART: Breakdown by Tags
-    (function() {
-        if (!tagData.length) return;
-        const margin = {top: 40, right: 25, bottom: 60, left: 120};
-        const container = document.getElementById("tag-bar");
-        const width = Math.max((container ? container.getBoundingClientRect().width : 1000) - margin.left - margin.right, 300);
-        const height = Math.max(tagData.length * 40, 250);
-        
-        const svg = d3.select("#tag-bar")
-            .append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-          .append("g")
-            .attr("transform",`translate(${margin.left},${margin.top})`);
-
-        const x = d3.scaleLinear()
-            .domain([0, d3.max(tagData, d => d.count) || 1])
-            .nice()
-            .range([0, width]);
-            
-        const y = d3.scaleBand()
-            .domain(tagData.map(d => d.tag))
-            .range([0, height])
-            .padding(0.2);
-
-        // Add gradient
-        const gradient = svg.append("defs")
-          .append("linearGradient")
-            .attr("id", "tag-gradient")
-            .attr("x1", "0%")
-            .attr("x2", "100%");
-        gradient.append("stop")
-            .attr("offset", "0%")
-            .attr("stop-color", "#667eea");
-        gradient.append("stop")
-            .attr("offset", "100%")
-            .attr("stop-color", "#764ba2");
-
-        // Y axis
-        svg.append("g")
-            .call(d3.axisLeft(y))
-            .selectAll("text")
-            .style("font-size", "12px")
-            .style("font-weight", "500");
-            
-        // X axis
-        svg.append("g")
-            .attr("transform", `translate(0,${height})`)
-            .call(d3.axisBottom(x).ticks(5));
-
-        const tooltip = d3.select("#d3-tooltip");
-
-        // Bars
-        svg.selectAll("rect")
-            .data(tagData)
-            .enter().append("rect")
-            .attr("x", 0)
-            .attr("y", d => y(d.tag))
-            .attr("width", 0)
-            .attr("height", y.bandwidth())
-            .attr("fill", "url(#tag-gradient)")
-            .attr("rx", 4)
-            .on("mousemove", function(e, d){
-                tooltip.style("display", "block")
-                    .html(`<b>${d.tag}</b>: ${d.count} book${d.count==1?"":"s"}`)
-                    .style("left", (e.pageX + 16) + "px")
-                    .style("top", (e.pageY - 24) + "px");
+                    .html(`<b>${d.year}</b>: ${d.count} book${d.count == 1 ? "" : "s"}`)
+                    .style("left", (e.pageX + 14) + "px").style("top", (e.pageY - 20) + "px");
             })
             .on("mouseout", () => tooltip.style("display", "none"))
-            .transition()
-            .duration(1000)
-            .attr("width", d => x(d.count));
-            
-        // Value labels
-        svg.selectAll(".label")
-            .data(tagData)
-            .enter().append("text")
-            .attr("class", "label")
-            .attr("x", d => x(d.count) + 8)
-            .attr("y", d => y(d.tag) + y.bandwidth() / 2)
-            .attr("dy", ".35em")
-            .style("font-size", "13px")
-            .style("font-weight", "700")
-            .style("fill", "#667eea")
-            .text(d => d.count)
-            .style("opacity", 0)
-            .transition()
-            .delay(1000)
-            .duration(500)
-            .style("opacity", 1);
-            
-        // Axis labels
-        svg.append("text")
-            .attr("x", width/2)
-            .attr("y", height + margin.bottom - 15)
-            .attr("text-anchor", "middle")
-            .style("font-size", "12px")
-            .style("font-weight", "600")
-            .style("fill", "#7f8c8d")
-            .text("Number of Books");
-            
-        svg.append("text")
-            .attr("transform", "rotate(-90)")
-            .attr("y", 0 - margin.left)
-            .attr("x", 0 - (height / 2))
-            .attr("text-anchor", "middle")
-            .style("font-size", "12px")
-            .style("font-weight", "600")
-            .style("fill", "#7f8c8d")
-            .text("Tags");
+            .transition().duration(900).delay((d, i) => i * 80)
+            .attr("y", d => y(d.count)).attr("height", d => height - y(d.count));
     })();
-    
-    // Add smooth scroll for page load
-    window.addEventListener('load', () => {
-        document.querySelectorAll('.fade-in-up').forEach((el, index) => {
-            setTimeout(() => {
-                el.style.opacity = '1';
-            }, index * 100);
-        });
-    });
-    </script>
+
+    // LINE CHART: by Author
+    (function() {
+        if (!authorData.length) return;
+        const margin = {top: 20, right: 20, bottom: 90, left: 40};
+        const container = document.getElementById("author-line");
+        const width = Math.max((container ? container.getBoundingClientRect().width : 900) - margin.left - margin.right, 280);
+        const height = 320;
+        const svg = d3.select("#author-line").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const x = d3.scalePoint().domain(authorData.map(d => d.author)).range([0, width]).padding(0.5);
+        const y = d3.scaleLinear().domain([0, d3.max(authorData, d => d.count) || 1]).nice().range([height, 0]);
+
+        svg.append("g").attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x).tickFormat(d => d.length > 18 ? d.slice(0, 16) + "…" : d))
+            .selectAll("text")
+            .attr("text-anchor", "end").attr("dx", "-0.7em").attr("dy", ".15em")
+            .attr("transform", "rotate(-40)").style("font-size", "10px").style("fill", "var(--bv-text-2)");
+        svg.append("g").call(d3.axisLeft(y).ticks(6))
+            .selectAll("text").style("font-size", "11px").style("fill", "var(--bv-text-2)");
+        svg.selectAll(".domain, .tick line").style("stroke", "var(--bv-border-strong)");
+
+        svg.append("g").style("stroke-dasharray", "3,3").style("opacity", 0.15)
+            .call(d3.axisLeft(y).ticks(6).tickSize(-width).tickFormat(""));
+
+        const area = d3.area().x(d => x(d.author)).y0(height).y1(d => y(d.count));
+        svg.append("path").datum(authorData)
+            .attr("fill", "#7c6dfa").attr("opacity", 0.1).attr("d", area);
+
+        const line = svg.append("path").datum(authorData)
+            .attr("fill", "none").attr("stroke", "#7c6dfa").attr("stroke-width", 2.5)
+            .attr("d", d3.line().x(d => x(d.author)).y(d => y(d.count)));
+        const len = line.node().getTotalLength();
+        line.attr("stroke-dasharray", len + " " + len).attr("stroke-dashoffset", len)
+            .transition().duration(1800).attr("stroke-dashoffset", 0);
+
+        const tooltip = d3.select("#d3-tooltip");
+        svg.selectAll("circle").data(authorData).enter().append("circle")
+            .attr("cx", d => x(d.author)).attr("cy", d => y(d.count))
+            .attr("r", 0).attr("fill", "#7c6dfa").attr("stroke", "var(--bv-surface-2)").attr("stroke-width", 2)
+            .on("mousemove", (e, d) => {
+                tooltip.style("display", "block")
+                    .html(`<b>${d.author.replace(/</g, "&lt;")}</b>: ${d.count} book${d.count == 1 ? "" : "s"}`)
+                    .style("left", (e.pageX + 14) + "px").style("top", (e.pageY - 20) + "px");
+            })
+            .on("mouseout", () => tooltip.style("display", "none"))
+            .transition().delay((d, i) => 1800 + i * 40).duration(300).attr("r", 5);
+    })();
+
+    // HORIZONTAL BAR: by Tag
+    (function() {
+        if (!tagData.length) return;
+        const margin = {top: 16, right: 40, bottom: 30, left: 110};
+        const container = document.getElementById("tag-bar");
+        const width = Math.max((container ? container.getBoundingClientRect().width : 800) - margin.left - margin.right, 200);
+        const height = Math.max(tagData.length * 36, 180);
+
+        const svg = d3.select("#tag-bar").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const x = d3.scaleLinear().domain([0, d3.max(tagData, d => d.count) || 1]).nice().range([0, width]);
+        const y = d3.scaleBand().domain(tagData.map(d => d.tag)).range([0, height]).padding(0.25);
+
+        svg.append("g").call(d3.axisLeft(y))
+            .selectAll("text").style("font-size", "12px").style("fill", "var(--bv-text-2)");
+        svg.append("g").attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x).ticks(5))
+            .selectAll("text").style("font-size", "11px").style("fill", "var(--bv-text-2)");
+        svg.selectAll(".domain, .tick line").style("stroke", "var(--bv-border-strong)");
+
+        const tooltip = d3.select("#d3-tooltip");
+
+        svg.selectAll("rect").data(tagData).enter().append("rect")
+            .attr("x", 0).attr("y", d => y(d.tag))
+            .attr("width", 0).attr("height", y.bandwidth())
+            .attr("fill", "#7c6dfa").attr("rx", 4).attr("opacity", 0.85)
+            .on("mousemove", (e, d) => {
+                tooltip.style("display", "block")
+                    .html(`<b>${d.tag}</b>: ${d.count} book${d.count == 1 ? "" : "s"}`)
+                    .style("left", (e.pageX + 14) + "px").style("top", (e.pageY - 20) + "px");
+            })
+            .on("mouseout", () => tooltip.style("display", "none"))
+            .transition().duration(900).delay((d, i) => i * 60).attr("width", d => x(d.count));
+
+        svg.selectAll(".val-label").data(tagData).enter().append("text")
+            .attr("x", d => x(d.count) + 6).attr("y", d => y(d.tag) + y.bandwidth() / 2)
+            .attr("dy", ".35em").style("font-size", "12px").style("font-weight", "700")
+            .style("fill", "#7c6dfa").style("opacity", 0)
+            .text(d => d.count)
+            .transition().delay(900).duration(300).style("opacity", 1);
+    })();
+</script>
 {% endblock %}

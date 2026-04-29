@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, jsonify, request, current_app, send_from_directory
-from helpers import search_google_books_by_isbn, insert_book, get_all_books, filter_books, validate_isbn
+import re
+from helpers import search_google_books_by_isbn, search_google_books_multiple, insert_book, get_all_books, filter_books, validate_isbn
 from werkzeug.utils import secure_filename
 from helpers import update_book_ebook_path,get_ebook_path_by_book_id,create_upload_folder,update_physical_copy
 
@@ -87,6 +88,69 @@ def api_download_ebook(book_id):
     else:
         return jsonify(success=False, message="Ebook not found"), 404
     
+@api_bp.route("/search_books")
+def api_search_books():
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify(results=[])
+    import requests as req
+    clean = query.replace('-', '').replace(' ', '')
+    if re.match(r'^\d{10}$|^\d{13}$', clean) and validate_isbn(clean):
+        url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{clean}&maxResults=5"
+    else:
+        url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults=20"
+    try:
+        resp = req.get(url, timeout=10)
+    except req.exceptions.RequestException:
+        return jsonify(results=[], error="Could not reach Google Books. Check your connection."), 503
+    if resp.status_code == 429:
+        return jsonify(results=[], error="Google Books API quota exceeded. Try again tomorrow or add an API key."), 429
+    if resp.status_code != 200:
+        return jsonify(results=[], error=f"Google Books returned an error ({resp.status_code})."), 502
+    items = resp.json().get("items", [])
+    results = []
+    for item in items:
+        info = item["volumeInfo"]
+        identifiers = info.get("industryIdentifiers", [])
+        isbn = next((i["identifier"] for i in identifiers if "ISBN" in i.get("type", "")), None)
+        series_info = item.get("seriesInfo", {})
+        results.append({
+            "title": info.get("title", "Unknown title"),
+            "author": ", ".join(info.get("authors", ["Unknown author"])),
+            "cover": info.get("imageLinks", {}).get("thumbnail", ""),
+            "isbn": isbn,
+            "series": series_info.get("title") or info.get("subtitle"),
+            "publisher": info.get("publisher"),
+            "publishedDate": info.get("publishedDate"),
+            "description": info.get("description"),
+            "selfLink": item.get("selfLink"),
+        })
+    return jsonify(results=results)
+
+@api_bp.route("/add_book", methods=["POST"])
+def api_add_book():
+    data = request.json or {}
+    title = data.get('title', '').strip()
+    author = data.get('author', '').strip()
+    if not title or not author:
+        return jsonify(success=False, message="Title and author are required"), 400
+    book = {
+        'title': title,
+        'author': author,
+        'cover': data.get('cover'),
+        'status': 'TBR',
+        'isbn': data.get('isbn'),
+        'series': data.get('series'),
+        'publisher': data.get('publisher'),
+        'publishedDate': data.get('publishedDate'),
+        'description': data.get('description'),
+        'selfLink': data.get('selfLink'),
+    }
+    success = insert_book(book)
+    if success:
+        return jsonify(success=True)
+    return jsonify(success=False, message="Could not add book"), 500
+
 @api_bp.route("/update_physical_copy/<int:book_id>/<int:status>", methods=["POST"])
 def api_update_physical_copy(book_id,status):
     try:
